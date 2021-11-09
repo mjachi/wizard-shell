@@ -1,5 +1,6 @@
 #ifndef WIZARD_SHELL_PROMPT_H
 #define WIZARD_SHELL_PROMPT_H
+
 #define BUFF_SIZE 1024
 #define TOKS 512
 

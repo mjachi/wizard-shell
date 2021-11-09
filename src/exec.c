@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <pwd.h>
 #include <errno.h>
+#include <ncurses.h>
 
 #include "exec.h"
 #include "ht.h"
@@ -32,14 +33,29 @@ extern char **env;
  * just a "pretty"-fying function that prints out some things.
  */
 int bin_splash(int argc, char **argv) {
-  if (argv[1]) {
+  if (argc > 1) {
     // too many arguments
-    return 1;
+    return -1;
+  }
+  int ret = 0;
+  FILE *mural_ptr = fopen("../mural.txt", "r");
+  if (!mural_ptr) {
+    printw("Skipping splash; failed to find mural.txt");
+    ret = -1;
   }
 
+  clear();
+  int c;
+  while ((c = getc(mural_ptr)) != EOF) {
+    addch(c);
+    refresh();
+  }
+  fclose(mural_ptr);
+  printw("wsh (:wizard: shell) \n\n\n");
 
-
-  return 0;
+  refresh();
+  
+  return ret;
 }
 
 
@@ -53,8 +69,19 @@ int bin_splash(int argc, char **argv) {
 int bin_exit(int argc, char **argv) {
   UNUSED(argc);
   UNUSED(argv);
+  
+  // TODO --- forking/ subshell exiting.
 
-  return 0;
+  if (argc == 1) {
+    endwin();
+    exit(0);
+  } else if (argc == 2) {
+    endwin();
+    exit(atoi(argv[1]));
+  } 
+  printw("exit: too many arguments passed. Recall \"exit <code>\", with the code being optional\n");
+  refresh();
+  return -1;
 }
 
 /** 
@@ -76,7 +103,7 @@ int bin_rm(int argc, char **argv) {
  * bin_chdir
  *
  * builtin for file navigation. Hard-coded alias 
- * linking here from "cd"
+ * linking here from "cd home"
  *
  */
 int bin_chdir(int argc, char **argv){
@@ -129,7 +156,7 @@ static void *bi_list[] = {
 };
 
 HashTable* gen_builtin(){
-  size_t num_pairs = sizeof(bi_list) / (sizeof(bi_list[0]) + sizeof(bi_list[1]));
+  int num_pairs = sizeof(bi_list) / (sizeof(bi_list[0]) + sizeof(bi_list[1]));
 
   HashTable* ht = newHashTable(num_pairs);
 
@@ -137,13 +164,7 @@ HashTable* gen_builtin(){
   // hopefully it's clear what the intent was
   size_t i;
   for (i = 0; i < num_pairs*2; i+=2) {
-    HNode* curr = malloc(sizeof(HNode));
-    curr->key = bi_list[i];
-    curr->val = bi_list[i+1];
-
-    ht_set(ht, curr);
-
-    free(curr);
+    ht_set(ht, bi_list[i], bi_list[i+1]);
   }
 
   return ht;
@@ -156,9 +177,7 @@ HashTable* gen_alias(){
   HashTable* ht = newHashTable(INIT_ALIAS_MAX);
 
   // hard code a few prebuilts...
-  HNode* for_cd = malloc(sizeof(HNode*));
-  for_cd->key = "cd";
-  for_cd->val = "chdir";
+  ht_set(ht, "cd", "chdir");
 
   return ht;
 }

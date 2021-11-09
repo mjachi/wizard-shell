@@ -6,14 +6,23 @@
 #include <pwd.h>
 #include <errno.h>
 #include <ncurses.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <limits.h>
 #include <assert.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <signal.h>
+#include <fcntl.h>
 
-#include "./prompt.h"
+#include "prompt.h"
+#include "exec.h"
 
-#define HOST_NAME_MAX 63
-#define UID_MAX 31
-
+//#define _BSD_SOURCE
+//#define _POSIX_SOURCE
 #define UNUSED(x) (void)(x)
+#define MAX_HOST 253
+#define MAX_PATH 4096
 
 extern int errno;
 
@@ -22,6 +31,55 @@ extern int errno;
  *
  * Contains I/O and REPL implementations.
  */
+
+/**
+ * fileio
+ *
+ * Logic to manage redirection. 
+ *
+ */
+void fileIO(char * args[], char* inputFile, char* outputFile, int option){
+	 
+	int err = -1;
+  pid_t pid;
+	
+	int fileDescriptor; // between 0 and 19, describing the output or input file
+	
+	if((pid=fork())==-1){
+		printf("Child process could not be created\n");
+		return;
+	}
+	if(pid==0){
+		// Option 0: output redirection
+		if (option == 0){
+			// We open (create) the file truncating it at 0, for write only
+			fileDescriptor = open(outputFile, O_CREAT | O_TRUNC | O_WRONLY, 0600); 
+			// We replace de standard output with the appropriate file
+			dup2(fileDescriptor, STDOUT_FILENO); 
+			close(fileDescriptor);
+		// Option 1: input and output redirection
+		}else if (option == 1){
+			// We open file for read only (it's STDIN)
+			fileDescriptor = open(inputFile, O_RDONLY, 0600);  
+			// We replace de standard input with the appropriate file
+			dup2(fileDescriptor, STDIN_FILENO);
+			close(fileDescriptor);
+			// Same as before for the output file
+			fileDescriptor = open(outputFile, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+			dup2(fileDescriptor, STDOUT_FILENO);
+			close(fileDescriptor);		 
+		}
+		 
+		//setenv("parent",getcwd(currentDirectory, 1024),1);
+		
+		if (execvp(args[0],args)==err){
+			printf("err");
+			//kill(getpid(),SIGTERM);
+		}		 
+	}
+	waitpid(pid,NULL,0);
+}
+
 
 /**
  * parse
@@ -65,80 +123,42 @@ void parse(char buffer[BUFF_SIZE], char *tokens[TOKS], char *argv[TOKS]) {
   }
 }
 
-/**
- * get_env
- *
- * Just the logic to retrieve things about current environment/ user
- *
- */
-void get_env(char *uid, char *host, char *path, char *home){
-  
-  // Finds current euid to set bang and name according to
-  struct passwd* p = getpwuid(geteuid());
-
-  uid = (p) ? p->pw_name : "USER";
-
-}
-
 
 /**
  * Main REPL driving function.
  */
 int wsh_main(int argc, char **argv) {
-  // Passing in the given arguments allows easy
-  // extensibility to be able to do e.g. "sh -c ls ~/Desktop"
-  // or something like that.
-  
-  // these two are only used for passing in args
   UNUSED(argc);
-  UNUSED(argv); 
-
-  /** CLI stuff...
-   * send argv directly over...
-   */
+  UNUSED(argv);
 
   /**
    * Find hostname, username, and if current user is a root or not.
-   * Does not support user swapping (command not built)
    */
-  char* uid = "user";
-  char* host = "wsh";
-  char* path = "";
-  char* home = "/";
-  get_env(uid, host, path, home);
+  char* t;
+  char* uid = (t=getenv("USER")) ? t : "user";
+  char host[MAX_HOST+1];
+  if (gethostname(host, MAX_HOST+1) < 0) {
+    endwin();
+    perror("Issues retrieving hostname; seems to be undefined or long than the maximum length somehow");
+    exit(1);
+  }
+  char* path = (t=getenv("PATH")) ? t : "/bin/";
+  char* home = (t=getenv("HOME")) ? t : "/";
+  char* cwd = home; // alternatively set to getcwd to start from 
+                    // location of the executable
+  
+  /** CLI stuff... add conditional for a flag?
+   * send argv directly over...
+   */
 
 #ifdef PROMPT 
   char *bang = "user @ wsh % ";
-  
-  char hostname[HOST_NAME_MAX + 1];
-  char *uid;
-  struct passwd* p = getpwuid(geteuid());
 
-
-  if (strlen(uid) > UID_MAX){ // theoretically never happens
-    fprintf(stderr, "UID exceeds max length of %d; this is theoretically not possible on *NIX systems...", UID_MAX);
-    uid = "USER";
-    exit(1);
-  } 
-
-  int hn = gethostname(hostname, sizeof(hostname));
-  if (hn < 0) {
-    perror("Error retrieving hostname");
-    exit(1);
-  }
-
-  bang = strcat(uid, "@");
-  bang = strcat(bang, hostname);
-
-  if(!geteuid()){
-    bang = strcat(bang, " # ");
-  } else {
-    bang = strcat(bang, " % ");
-  }
-
-  // now, to get the current user home directory
-  const char home_dir = p->pw_dir;
-
+  //if(!geteuid()){
+    //bang = strcat(bang, " # ");
+  //} else {
+    //bang = strcat(bang, " % ");
+  //}
 
   /**
    * Opening script... prints out whatever is in mural.txt.
@@ -165,16 +185,9 @@ int wsh_main(int argc, char **argv) {
  
   // Beginning of REPL
   for (;;) {
-    int r = fprintf(stdout, "%s", bang); 
-    if(r < 0) {
-      perror("Issues printing out via printf. ");
-      return 1;
-    }
-    int f = fflush(stdout);
-    if (f < 0) {
-      perror("Could not flush buffer properly");
-      return 1; 
-    }
+
+    // TODO -- print here
+
     /**
      * - User can enter nothing and hit the return key (your terminal should 
      *   simply ignore the input and start a new line in the terminal, as Linux systems do).
@@ -193,18 +206,13 @@ int wsh_main(int argc, char **argv) {
     memset(tokens, 0, sizeof(tokens));
     memset(args, 0, sizeof(args));
 
-    read(STDIN_FILENO, buf, sizeof(buf));
+    //read(STDIN_FILENO, buf, sizeof(buf));
+    getch();
     parse(buf, tokens, args);
 
-    //printf("\n Your input was %s\n", buf);
-    printf("The first three tokens are %s, %s, %s", tokens[0], tokens[1], tokens[2]);
-    printf("\n The first five args are \n");
-
-    for (int i = 0; i < 5 && args[i]; i++) {
-      printf("%s\n", args[i]);
-    }
-      
-    
+    #ifdef DBG
+      // file io to log
+    #endif
 
   }
 #endif
