@@ -7,9 +7,10 @@ OBJD_DIR := objd
 BIN_DIR := bin
 
 CPPFLAGS := -Iinclude -MMD -MP
-CFLAGS   := -g3 -Wall -Wcast-align -g
+# CFLAGS   := -g3 -Wall -Wcast-align -g
+CFLAGS   := -g3 -g
 CFLAGS   += -Winline -Wfloat-equal -Wnested-externs
-CFLAGS   += -std=gnu99 
+CFLAGS   += -std=gnu11
 LDFLAGS  := -Llib
 LDLIBS   := -lm -lncurses -ltinfo
 
