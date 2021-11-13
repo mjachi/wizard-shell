@@ -1,5 +1,7 @@
 #include "prompt.h"
 #include "misc.h"
+#include <dirent.h>
+#include <limits.h>
 
 #define _BSD_SOURCE
 #define _XOPEN_SORUCE 700
@@ -456,13 +458,13 @@ int wsh_main(int argc, char **argv) {
 
   // set up completions tree
 
-  TrieNode *root = tn_newNode();
+  TrieNode *root = tn_getNode();
   tn_insert(root, "cd");
   tn_insert(root, "ln");
+  tn_insert(root, "bg");
   tn_insert(root, "rm");
   tn_insert(root, "jobs");
   tn_insert(root, "fg");
-  tn_insert(root, "bg");
   tn_insert(root, "testforcompletions");
   tn_insert(root, "foobazbarbar");
 
@@ -511,8 +513,10 @@ int wsh_main(int argc, char **argv) {
     char *buffer = malloc(sizeof(char) * bfs);
     int in;
 
-
     // cwd files
+    //DIR *d
+    //struct dirent *dir;
+    //d = opendir()
 
     if (!buffer) {
       endwin();
@@ -551,7 +555,7 @@ int wsh_main(int argc, char **argv) {
           }
           break;
 
-          // TODO -- completions, PATH recognition, alias
+          // TODO -- PATH recognition, alias
 
         case KEY_UP:
           if(pos != 0 || buffer[0]) break;
@@ -623,7 +627,7 @@ int wsh_main(int argc, char **argv) {
                 pos = strlen(hist_comm);
 
                 // print as desired
-                printw("%s", hist_comm);
+                printw("%s", buffer);
                 refresh();
                 break; // end of KEYDOWN for dialogue
                 
@@ -651,27 +655,25 @@ int wsh_main(int argc, char **argv) {
           refresh();
           break;
         
-        case KEY_STAB:
+        case KEY_STAB: // currently only a single word.
         case '\t':
-          refresh();
-          char *prefix = strrchr(buffer, ' ')+1;
-          if (!(prefix-1)) {
-            strcpy(prefix, buffer);
+          if(pos == 0) {
+            break;
           }
-          char *sugg = suggestionsRec(root, prefix);
-          printw("\n\n %s\n", sugg);
-
-          break;
-          int i = strlen(prefix);
-          while (i > 0) {
+          refresh();
+          getsyx(cy,cx);
+          char *temp = strrchr(buffer,' ');
+          char *prefix = temp-1 ? buffer : temp;
+          char *sugg = completionOf(root, prefix);
+          while (pos > 0) {
             move(cy,--cx);
             delch();
-            buffer[pos--] = '\0';
-            i--;
+            pos--;
           } // delete key behavior until buffer is clear
 
           printw("%s",sugg);
           pos += strlen(sugg);
+          //printw("\n\n%d\n\n", pos);
 
           refresh();
           
@@ -691,13 +693,15 @@ int wsh_main(int argc, char **argv) {
           continue;
         }
       }
-
     }
     refresh();
 
     // tokenize 
     char **tokens = wsh_tokenize(buffer);
     char **argv = prep(tokens);
+    
+    //if (tokens[0]) tn_insert(root, tokens[0]);
+
     if (!tokens){
       // if error while parsing
       fprintf(stderr, "{wsh @ REPL -- parsing} -- ran into generic error parsing\n");

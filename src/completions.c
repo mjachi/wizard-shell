@@ -16,51 +16,91 @@
 /**
  * Member functions.
  */ 
-
-// Creates a new node
-// Error check if returns NULL!
-TrieNode *tn_newNode(void) {
-  TrieNode *p = malloc(sizeof(struct TrieNode));
-  if (p) {
-    int i;
-    p->isLeaf = 0;
-    for (i = 0; i < ALPHABET_S; i++) {
-      p->children[i] = NULL;
-    }
-  }
-  return p;
-}
-
-// inserts new word into the tree.
-void tn_insert(TrieNode *root, const char *key){
-    TrieNode *curr = root;
-    for (int i = 0; i < strlen(key); i++){
-        int ind = CHAR_TO_INDEX(key[i]);
-        if (curr->children[ind] == NULL) {
-            curr->children[ind] = tn_newNode();
-        }
-        curr = curr->children[ind];
+// Returns new trie node
+TrieNode *tn_getNode(void) {
+    TrieNode *pNode = NULL;
+ 
+    pNode = malloc(sizeof(struct TrieNode));
+ 
+    if (pNode){
+        int i;
+ 
+        pNode->isLeaf = false;
+ 
+        for (i = 0; i < ALPHABET_S; i++)
+            pNode->children[i] = NULL;
     }
  
-    // mark the current node as a leaf
-    curr->isLeaf = 1;
+    return pNode;
 }
-
-// search through tree to tell when the key is there
-// in whole
-int tn_search (TrieNode *root, const char *key) {
-
-    TrieNode* curr = root;
-    for(int i = 0; i < strlen(key); i++) {
-        int index = CHAR_TO_INDEX(key[i]);
-        if (!curr->children[index]) {
+ 
+// If not present, inserts
+// If the key is prefix of trie node, just marks leaf node
+void tn_insert(TrieNode *root, const char *key){
+    int length = strlen(key), level, index;
+ 
+    TrieNode *pCrawl = root;
+ 
+    for (level = 0; level < length; level++) {
+        index = CHAR_TO_INDEX(key[level]);
+        if (!pCrawl->children[index])
+            pCrawl->children[index] = tn_getNode();
+ 
+        pCrawl = pCrawl->children[index];
+    }
+ 
+    // mark last node as leaf
+    pCrawl->isLeaf = true;
+}
+ 
+// Returns true if key presents in trie, else false
+int tn_search(struct TrieNode *root, const char *key){
+    int length = strlen(key), i, index;
+    struct TrieNode *pCrawl = root;
+ 
+    for (i = 0; i < length; i++) {
+        index = CHAR_TO_INDEX(key[i]);
+ 
+        if (!pCrawl->children[index]){
             return 0;
         }
-        curr = curr->children[index];
+ 
+        pCrawl = pCrawl->children[index];
     }
  
-    return (curr && curr->isLeaf);
+    return (pCrawl->isLeaf);
 }
+
+// Returns true if root has no children, else false
+int isEmpty(TrieNode* root){
+    for (int i = 0; i < ALPHABET_S; i++)
+        if (root->children[i])
+            return 0;
+    return 1;
+}
+
+// Recursive function to delete a key
+TrieNode* tn_remove(TrieNode* root, char *key, int depth){
+    if (!root){
+      return NULL;
+    }
+ 
+    if (depth == strlen(key)) {
+        if (root->isLeaf) root->isLeaf = false;
+        if (isEmpty(root)) free(root);
+    }
+    int index = key[depth] - 'a';
+    root->children[index] =
+          tn_remove(root->children[index], key, depth + 1);
+ 
+    if (isEmpty(root) && root->isLeaf == 0) {
+        free (root);
+        return NULL;
+    }
+ 
+    return root;
+}
+
 
 // if no children
 int isLastNode (TrieNode* root) {
@@ -68,24 +108,46 @@ int isLastNode (TrieNode* root) {
     return 1;
 }
 
+// returns the first completion found
+char *suggestionsRec (TrieNode *root, char *prefix, int app) {
+  if (root->isLeaf) return prefix;
+  if (isLastNode(root)) return prefix;
+
+  for (int i = 0; i < ALPHABET_S; i++) {
+    if (root->children[i]) {
+      char str[2];
+      str[0] = 97+i;
+      str[1] = '\0';
+
+      if (app) strcat(prefix, str);
+      suggestionsRec(root->children[i], prefix, 1);
+    }
+  }
+  return prefix; 
+}
+
+
 // return the prefix completion/ "suffix" so to speak
-char *suggestionsRec (TrieNode *root, char *prefix) {
-  if (isLastNode(root)) {
-    return prefix;
+char *completionOf (TrieNode *root, char *prefix) {
+  
+  TrieNode *pCrawl = root;
+  int len = strlen(prefix); 
+
+  for (int i = 0; i+1 < len; i++) {
+    int index = CHAR_TO_INDEX(prefix[i]);
+    if (!pCrawl->children[index]) {
+      return prefix;
+    }
+    pCrawl = pCrawl->children[index];
   }
 
-  int i;
-  for (i = 0; i < ALPHABET_S; i++) {
+  int is_leaf = (pCrawl->isLeaf);
+  int is_last = isLastNode(pCrawl);
 
-    if (root->children[i]) {
-      char c = i+(int)'a';
-      char str[2];
-      str[0] = c;
-      str[1] = '\0';
-      strcat(prefix, str);
-
-      suggestionsRec(root->children[i], prefix);
-    }
+  if (is_leaf && is_last) {
+    return prefix;
+  } else if (!is_last) {
+    return suggestionsRec(pCrawl, prefix,0);
   }
 
   return NULL;

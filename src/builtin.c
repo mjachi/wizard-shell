@@ -20,8 +20,18 @@ int bin_cd(int argc, char **argv){
         return -1;
     }
     
-    if (strcmp(argv[1], "~") == 0 || !argv[1]) {
-      strcpy(argv[1], getenv("HOME"));
+    if (strcmp(argv[1], "~") == 0 || argc==1) {
+      char *t = getenv("HOME");
+      char *rst = strchr(t, '\n');
+      if (!rst) {
+        *rst = '\0';
+      }
+      int s = chdir(t);
+      if (s < 0){
+        char *error = strerror(errno);
+        printw("\n\t cd: %s", error);
+        return -1;
+      }
     }
 
     if (chdir(argv[1]) < 0) {
