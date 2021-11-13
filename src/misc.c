@@ -6,7 +6,7 @@
 #include <pwd.h>
 #include <errno.h>
 
-#include "./misc.h"
+#include "misc.h"
 
 #define UNUSED(x) (void)(x)
 
@@ -19,7 +19,37 @@ extern int errno;
  * of wsh e.g. implementation for arithmetic evaluation in-line
  */ 
 
+// 1 if is redirect token, 0 otherwise
+int is_redirect(char *str) {
+    return strcmp(str, "<") || strcmp(str, ">") || strcmp(str, ">>");
+}
 
+// finds first nonredirect and returns it
+char *first_nonredirect(char *tokens[], char *prev) {
+    if (!is_redirect(tokens[0]) && !is_redirect(prev)) {
+        return tokens[0];
+    } else {
+        return first_nonredirect(tokens + 1, tokens[0]);
+    }
+}
+
+// returns length of string array
+int ppstrlen(char *alos[]) {
+    int i;
+    for (i = 0; alos[i] != NULL; i++) {
+    }
+    return i;
+}
+
+// returns the final string in a string array
+char *ppstr_final(char *alos[]) {
+    for (int i = 0; alos[i] != NULL; i++) {
+        if (alos[i + 1] == NULL) {
+            return alos[i];
+        }
+    }
+    return NULL;
+}
 
 /** matheval suite (the matheval#'s) -- TODO
  *

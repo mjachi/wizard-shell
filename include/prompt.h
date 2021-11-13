@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <pwd.h>
 #include <errno.h>
-#include <ncurses.h>
 #include <unistd.h>
 #include <termios.h>
 #include <stdio.h>
@@ -31,9 +30,6 @@
 #define BUFF_SIZE 1024
 #define TOKS 512
 
-extern job_list_t *jobs_list;
-extern int jcount;
-
-int wsh_main(int argc, char **argv, WINDOW* w);
+int wsh_main(int argc, char **argv);
 
 #endif
