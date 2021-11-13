@@ -457,6 +457,14 @@ int wsh_main(int argc, char **argv) {
   // set up completions tree
 
   TrieNode *root = tn_newNode();
+  tn_insert(root, "cd");
+  tn_insert(root, "ln");
+  tn_insert(root, "rm");
+  tn_insert(root, "jobs");
+  tn_insert(root, "fg");
+  tn_insert(root, "bg");
+  tn_insert(root, "testforcompletions");
+  tn_insert(root, "foobazbarbar");
 
   // Init the history data structures
   
@@ -464,11 +472,6 @@ int wsh_main(int argc, char **argv) {
   h->first = NULL;
   h->curr = NULL;
   h->count = 0;
-
-  // init builtins HT
-
-  HashTable *builtins = newHashTable(25);
-    // add the builtins
 
   // init alias HT
 
@@ -651,11 +654,27 @@ int wsh_main(int argc, char **argv) {
         case KEY_STAB:
         case '\t':
           refresh();
-          //char **tokens = wsh_tokenize(buffer);
-          //char *prefix = tokens[ppstrlen(tokens)-1];
+          char *prefix = strrchr(buffer, ' ')+1;
+          if (!(prefix-1)) {
+            strcpy(prefix, buffer);
+          }
+          char *sugg = suggestionsRec(root, prefix);
+          printw("\n\n %s\n", sugg);
 
+          break;
+          int i = strlen(prefix);
+          while (i > 0) {
+            move(cy,--cx);
+            delch();
+            buffer[pos--] = '\0';
+            i--;
+          } // delete key behavior until buffer is clear
 
+          printw("%s",sugg);
+          pos += strlen(sugg);
 
+          refresh();
+          
           break;
         
         default:
@@ -691,7 +710,6 @@ int wsh_main(int argc, char **argv) {
     // since defined, gives the length of each to be passed into everything.
     int tokct = ppstrlen(tokens);
     int argc = ppstrlen(argv);
-
 
     // If the Token isn't empty
     if (tokens[0] != NULL) {

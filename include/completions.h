@@ -46,6 +46,6 @@ int tn_search (TrieNode *root, const char *key);
 // inplace is set to the completion based as the user tabs
 // through options or the only option is there is just one
 // for the rest of one branch based on token.
-void completion(TrieNode *root, char *token, WINDOW* w);
+char *suggestionsRec(TrieNode *root, char *prefix);
 
 #endif

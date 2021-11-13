@@ -15,8 +15,8 @@ extern int errno;
  * Returns: Nothing
  */
 int bin_cd(int argc, char **argv){
-    if (argc < 2) {
-        printw("\n\tcd: syntax error -- requires an argument");
+    if (argc > 2) {
+        printw("\n\tcd: syntax error -- too many arguments");
         return -1;
     }
     
@@ -82,3 +82,6 @@ int bin_rm(int argc, char **argv) {
     }
     return 0;
 }
+
+
+

@@ -13,21 +13,6 @@
  *
  */
 
-// Returns the number of branches.
-int count (TrieNode *children[]) {
-  int c = 0, i;
-
-  for (i = 0; i < ALPHABET_S; i++) {
-    if(children[i]) {
-      c++;
-    }
-  }
-
-  return c;
-}
-
-
-
 /**
  * Member functions.
  */ 
@@ -49,13 +34,12 @@ TrieNode *tn_newNode(void) {
 // inserts new word into the tree.
 void tn_insert(TrieNode *root, const char *key){
     TrieNode *curr = root;
-    while (*key){
-        if (curr->children[*key - 'a'] == NULL) {
-            curr->children[*key - 'a'] = tn_newNode();
+    for (int i = 0; i < strlen(key); i++){
+        int ind = CHAR_TO_INDEX(key[i]);
+        if (curr->children[ind] == NULL) {
+            curr->children[ind] = tn_newNode();
         }
-        curr = curr->children[*key - 'a'];
- 
-        key++;
+        curr = curr->children[ind];
     }
  
     // mark the current node as a leaf
@@ -65,20 +49,46 @@ void tn_insert(TrieNode *root, const char *key){
 // search through tree to tell when the key is there
 // in whole
 int tn_search (TrieNode *root, const char *key) {
-    if (root == NULL) {
-        return 0;
-    }
+
     TrieNode* curr = root;
-    while (*key)
-    {
-        curr = curr->children[*key - 'a'];
-        if (curr == NULL) {
+    for(int i = 0; i < strlen(key); i++) {
+        int index = CHAR_TO_INDEX(key[i]);
+        if (!curr->children[index]) {
             return 0;
         }
-        key++;
+        curr = curr->children[index];
     }
  
-    return curr->isLeaf;
+    return (curr && curr->isLeaf);
+}
+
+// if no children
+int isLastNode (TrieNode* root) {
+    for (int i = 0; i < ALPHABET_S; i++) if (root->children[i]) return 0;
+    return 1;
+}
+
+// return the prefix completion/ "suffix" so to speak
+char *suggestionsRec (TrieNode *root, char *prefix) {
+  if (isLastNode(root)) {
+    return prefix;
+  }
+
+  int i;
+  for (i = 0; i < ALPHABET_S; i++) {
+
+    if (root->children[i]) {
+      char c = i+(int)'a';
+      char str[2];
+      str[0] = c;
+      str[1] = '\0';
+      strcat(prefix, str);
+
+      suggestionsRec(root->children[i], prefix);
+    }
+  }
+
+  return NULL;
 }
 
 
