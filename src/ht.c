@@ -33,7 +33,7 @@ char *strdup(const char *str)
 {
   char *str__;
   char *p;
-  int len = 0;
+  size_t len = 0;
 
   while (str[len])
       len++;
@@ -72,23 +72,23 @@ int ht_set_internal(HNode* hns, int capacity, size_t* plength, const char *key, 
   while(hns[ind].key) {
     if(!strcmp(key, hns[ind].key)){
       hns[ind].val = val;
-      return 1;
+      return 0;
     }
     ++ind;
     ind = ind > capacity - 1 ? 0 : ind;
   } // finds empty entry and places
 
-  if (plength) { // special case I ran into...
+  if (plength) { // special case
     key = strdup(key);
     if (!key) {
-      return 0;
+      return 1;
     }
     (*plength)++;
   }
-  hns[ind].key = (char *) key;
+  hns[ind].key = key;
   hns[ind].val = val;
 
-  return 1;
+  return 0;
 }
 
 // Double table size if need be 
@@ -97,7 +97,7 @@ void ht_blowup(HashTable* ht, double factor){
 	assert(ht);
   assert(factor > 1);
 
-  size_t new_cap = (int) (factor*ht->size);
+  size_t new_cap = (size_t) (factor * ht->size);
 	HNode* new_nodes = calloc(new_cap, sizeof(HNode*));
 	if(new_cap < ht->size || !new_nodes) {
 		fprintf(stderr, "Overflowed on a HashTable resize...");
@@ -185,7 +185,7 @@ void* ht_get(HashTable* ht, const char *key){
   assert(ht);
   assert(key);
 
-  size_t i = (size_t) (ht_hash(key) & (uint64_t)ht->size-1); 
+  size_t i = (size_t) (ht_hash(key) & (uint64_t)(ht->size-1)); 
   // TODO -- does cast or bitwise cause issue?
   // idea is to take hash and cast to something we can index with
   
