@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
-#include <stdio.h>
-#include <unistd.h>
 #include <pwd.h>
 #include <errno.h>
 #include <unistd.h>
@@ -20,6 +18,8 @@
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <stdio.h>
+#include <ncurses.h>
 
 #include "history.h"
 #include "completions.h"

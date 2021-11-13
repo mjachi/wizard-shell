@@ -35,7 +35,7 @@ int count (TrieNode *children[]) {
 // Creates a new node
 // Error check if returns NULL!
 TrieNode *tn_newNode(void) {
-  TrieNode *p = (struct TrieNode *) malloc(sizeof(struct TrieNode));
+  TrieNode *p = malloc(sizeof(struct TrieNode));
   if (p) {
     int i;
     p->isLeaf = 0;
@@ -81,19 +81,6 @@ int tn_search (TrieNode *root, const char *key) {
     return curr->isLeaf;
 }
 
-// completion dialogue
-void completion(TrieNode *root, char *token, WINDOW *w) {
-  size_t tlen = strlen(token);
-  
-  TrieNode* curr = root;
-
-  while(*token){
-    curr = curr->children[*token-'a'];
-  }
-
-  return;
-  
-}
 
 
 

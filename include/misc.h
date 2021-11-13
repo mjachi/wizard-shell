@@ -5,7 +5,7 @@
 
 
 // 1 if is redirect token, 0 otherwise
-int is_redirect(char *str);
+int is_not_redirect(char *str);
 
 // finds first nonredirect and returns it
 char *first_nonredirect(char *tokens[], char *prev);

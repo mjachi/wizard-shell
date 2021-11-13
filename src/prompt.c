@@ -1,6 +1,5 @@
 #include "prompt.h"
 #include "misc.h"
-#include "ncurses.h"
 
 #define _BSD_SOURCE
 #define _XOPEN_SORUCE 700
@@ -26,25 +25,25 @@ int jcount;
 
 int bin_fg(int argc, char **argv) {
     if (argc != 2) {
-        fprintf(stderr, "fg: \n");
+        printw("\n\tfg: syntax error -- requires exactly one argument");
         return -1;
     }
 
     if (argv[1][0] != '%') {
-        fprintf(stderr, "fg: job input does not begin with %%\n");
+        printw("\n\tfg: job input does not begin with %%\n");
         return -1;
     }
 
     int jid = atoi(argv[1] + 1);
     pid_t pid = get_job_pid(jobs_list, jid);
     if (pid < 0) {
-        fprintf(stderr, "job not found\n");
+        printw("\n\tjob not found\n");
         return -1;
     }
 
     tcsetpgrp(STDIN_FILENO, pid);
     if (kill(-1 * pid, SIGCONT) < 0) {
-        fprintf(stderr, "ERROR in continuing the job");
+        printw("\n\t{wsh @ bin_fg} -- ERROR in continuing the job");
         return -1;
     }
 
@@ -55,16 +54,16 @@ int bin_fg(int argc, char **argv) {
         }
         if (WIFSIGNALED(wstatus)) {
             remove_job_jid(jobs_list, jid);
-            if (fprintf(stdout, "[%d] (%d) terminated by signal %d\n", jcount,
-                        wret, WTERMSIG(wstatus)) < 0) {
-                fprintf(stderr, "ERROR - Error Writing to Output\n");
+            if (printw("\n[%d] (%d) terminated by signal %d\n", jcount,
+                        wret, WTERMSIG(wstatus)) == ERR) {
+                printw("\n\t{wsh @ bin_fg} -- ERROR writing to output\n");
             }
         }
         if (WIFSTOPPED(wstatus)) {
             update_job_jid(jobs_list, jid, STOPPED);
-            if (fprintf(stdout, "[%d] (%d) suspended by signal %d\n", jcount,
-                        wret, WSTOPSIG(wstatus)) < 0) {
-                fprintf(stderr, "ERROR - Error Writing to Output\n");
+            if (printw("\n\t[%d] (%d) suspended by signal %d\n", jcount,
+                        wret, WSTOPSIG(wstatus)) == ERR) {
+                printw("\n\t{wsh @ bin_fg} -- ERROR writing to output\n");
             }
         }
     }
@@ -76,24 +75,24 @@ int bin_fg(int argc, char **argv) {
 int bin_bg(int argc, char **argv) {
     // Checks that there's at least 1 arguments after the ln string
     if (argc != 2) {
-        fprintf(stderr, "bg: syntax error\n");
+        printw("\n\tbg: syntax error -- requires exactly one argument\n");
         return -1;
     }
 
     if (argv[1][0] != '%') {
-        fprintf(stderr, "bg: job input does not begin with %%\n");
+        printw("\n\tbg: job input does not begin with %%\n");
         return -1;
     }
 
     int jid = atoi(argv[1] + 1);
     pid_t pid = get_job_pid(jobs_list, jid);
     if (pid < 0) {
-        fprintf(stderr, "job not found\n");
+        printw("\n\tjob not found\n");
         return -1;
     }
 
     if (kill(-1 * pid, SIGCONT) < 0) {
-        fprintf(stderr, "ERROR in continuing the job");
+        printw("\n\tERROR in continuing the job");
         return -1;
     }
 
@@ -103,7 +102,7 @@ int bin_bg(int argc, char **argv) {
 
 int bin_jobs(int argc, char **argv) {
     if (argc != 1) {
-        fprintf(stderr, "jobs: syntax error\n");
+        printw("\n\tjobs: syntax error -- too many arguments; doesn't take any\n");
         return -1;
     }
 
@@ -122,13 +121,13 @@ char **wsh_tokenize(char *line) {
 
   if (!tokens) {
     fprintf(stderr, "{wsh @ tokenize} -- error allocating for buffer");
+    endwin();
     exit(EXIT_FAILURE);
   }
 
   token = strtok(line, TOK_DELIM);
   while (token != NULL) {
     tokens[pos] = token;
-    printf("\ntoken %d is %s", pos, token);
     pos++;
 
     if (pos >= bufsize) {
@@ -136,6 +135,7 @@ char **wsh_tokenize(char *line) {
       tokens = realloc(tokens, bufsize * sizeof(char*));
       if (!tokens) {
         fprintf(stderr, "{wsh @ tokenize} -- error allocating for buffer");
+        endwin();
         exit(EXIT_FAILURE);
       }
     }
@@ -161,7 +161,7 @@ char **prep (char **tokens) {
   }
 
   while ((tok = tokens[pos])){
-    if (!is_redirect(tok) && !strcmp("&",tok)) {
+    if (is_not_redirect(tok) && (strcmp(tok,"&")!=0)) {
       argv[pos] = tok;
       if (pos >= bufsize) {
         bufsize += PS_BFS;
@@ -172,6 +172,7 @@ char **prep (char **tokens) {
         }
       }
     }
+    pos++;
   }
 
   argv[pos] = NULL;
@@ -185,6 +186,190 @@ char **prep (char **tokens) {
   return argv;
 }
 
+
+// executes a given command per tokens and argv
+void execute(char **tokens, char **argv,
+                 int is_background) {
+    // Initial Variables
+    char *input = "\0";
+    char *clobber = "\0";  // for ">"
+    char *dclobber = "\0";  // for ">>"
+
+    int pipefd[2];
+    pipe(pipefd);
+
+    int store_errno = 0;
+
+    // find redirection symbols
+    for (int i = 0; tokens[i] != NULL; i++) {
+      if (strcmp(tokens[i], "<") == 0) {
+        if (strcmp(input, "\0") == 0) {
+          input = tokens[i + 1];
+            
+          if (input == NULL) {
+            printw("\n\t{wsh @ execute} -- no input file specified\n");
+            return;
+          }
+        } else {
+            printw("\n\t{wsh @ execute} -- syntax error: multiple input files\n");
+            return;
+        }
+
+      } else if (strcmp(tokens[i], ">") == 0) {
+        // handle output redirection:
+        // Check if the s_output variable has been changed already:
+        if (strcmp(clobber, "\0") == 0) {
+            clobber = tokens[i + 1];
+            if (clobber == NULL) {
+                printw("\n\t{wsh @ execute} -- no output file specified\n");
+                return;
+                }
+            } else {
+                // If it is, then we have multiple of the same redirection
+                // symbols
+                printw("\n\t{wsh @ execute} -- syntax error: multiple output files\n");
+                return;
+            }
+
+        } else if (strcmp(tokens[i], ">>") == 0) {
+            if (strcmp(dclobber, "\0") == 0) {
+                dclobber = tokens[i + 1];
+                if (dclobber == NULL) {
+                    printw("\n\t{wsh @ execute} -- no output file specified\n");
+                    return;
+                }
+            } else {
+                printw("\n\t{wsh @ execute} -- syntax error: multiple output files\n");
+                return;
+            }
+        }
+    }
+
+    if (strcmp(clobber, "\0") != 0 && strcmp(dclobber, "\0") != 0) {
+        printw("\n\t{wsh @ execute}syntax error: multiple output files\n");
+        return;
+    }
+
+    int is_output_double =
+        (strcmp(dclobber, "\0") != 0);
+    char *output = (is_output_double) ? dclobber : clobber;
+
+    pid_t pid = 0;
+
+    if (!(pid = fork())) { // child process
+        pid = getpid();
+        setpgid(pid, pid);
+        if (!is_background) {
+            tcsetpgrp(STDIN_FILENO, pid);
+        }
+
+        close(pipefd[0]);
+
+        dup2(pipefd[1],1);
+        dup2(pipefd[1],2);
+
+        close(pipefd[1]);
+
+        // for parent
+        signal(SIGINT, SIG_DFL);
+        signal(SIGTSTP, SIG_DFL);
+        signal(SIGTTOU, SIG_DFL);
+        signal(SIGCONT, SIG_DFL);
+
+        if (strcmp(input, "\0") != 0) {
+            if (close(STDIN_FILENO) < 0) {
+                endwin();
+                fprintf(stderr, "\n\t{wsh @ execute} -- error closing standard input\n");
+                exit(1);
+            }
+
+            if (open(input, O_RDONLY) < 0) {
+                endwin();
+                fprintf(stderr, "\n\t{wsh @ execute} -- error opening input file\n");
+                exit(1);
+            }
+        }
+
+        if (strcmp(output, "\0") != 0) {
+            if (close(STDOUT_FILENO) < 0) {
+               endwin();
+               fprintf(stderr, "\n\t{wsh @ execute} -- error closing standard output\n");
+                exit(1);
+            }
+
+            if (is_output_double) {
+                if (open(output, O_RDWR | O_CREAT | O_APPEND, 00600) < 0) {
+                    endwin();
+                    fprintf(stderr, "\n\t{wsh @ execute} -- error opening output file\n");
+                    exit(1);
+                }
+            } else {
+                if (open(output, O_RDWR | O_CREAT | O_TRUNC, 00600) < 0) {
+                    fprintf(stderr, "\n\t{wsh @ execute} -- error opening output file\n");
+                    exit(1);
+                }
+            }
+        }
+
+        // Executes the command in the child process
+        
+        execv(first_nonredirect(tokens, "\0"), argv);
+
+        perror("\n\texecv");
+
+        /* we won’t get here unless execv failed */
+        char *error = strerror(errno);
+        //endwin();
+        printw("\n\texecv: %s",error);
+        exit(1);
+    }
+
+    if (is_background) {
+
+        add_job(jobs_list, ++jcount, pid, RUNNING, first_nonredirect(tokens, "\0"));
+        if (printw("\n[%d] (%d)\n", jcount, pid) == ERR) {
+            printw("\n\t{wsh @ execute} -- error writing to output\n");
+        }
+
+    } else {
+        int wret, wstatus;
+        if ((wret = waitpid(pid, &wstatus, WUNTRACED)) > 0) {
+            if (WIFEXITED(wstatus)) {
+            }
+            if (WIFSIGNALED(wstatus)) {
+                // terminated by a signal
+                jcount = jcount + 1;
+                if (printw("\n[%d] (%d) terminated by signal %d\n",
+                            jcount, wret, WTERMSIG(wstatus)) == ERR) {
+                    printw("\n\t{wsh @ execute} -- error writing to output\n");
+                }
+            }
+            if (WIFSTOPPED(wstatus)) {
+                add_job(jobs_list, ++jcount, pid, STOPPED, first_nonredirect(tokens, "\0"));
+                if (printw("\n[%d] (%d) suspended by signal %d\n",
+                            jcount, wret, WSTOPSIG(wstatus)) == ERR) {
+                    printw("\n\t{wsh @ execute} -- error writing to output\n");
+                }
+            }
+        }
+
+        // Giving the terminal control back to the Shell
+        tcsetpgrp(STDIN_FILENO, getpgrp());
+
+        if (store_errno != 0) {
+          char *error = strerror(errno);
+          printw("\n\t {wsh @ execv} -- %s", error);
+        } else {
+          char buffer[2048];
+          close(pipefd[1]);
+          while (read(pipefd[0], buffer, sizeof(buffer))!=0) {
+            printw("\n %s", buffer);
+          }
+        }
+
+
+    }
+} 
 /* sigint_handler
  * Respond to SIGINT signal (CTRL-C)
  *
@@ -264,8 +449,6 @@ int wsh_main(int argc, char **argv) {
   jobs_list = init_job_list();
   jcount = 0;
 
-  char *bang = "\nwsh > ";
-
   // Setting Up Signal Ignores in Parent:
   signal(SIGINT, SIG_IGN);
   signal(SIGTSTP, SIG_IGN);
@@ -294,6 +477,12 @@ int wsh_main(int argc, char **argv) {
   // environment init
   char *home = getenv("HOME");
   char *uid = getenv("USER");
+
+  char bang[80];
+  char cwd[20];
+  strcpy(bang, "\n");
+  strcat(bang, uid);
+  strcat(bang, " @ wsh %% ");
  
 
   // REPL begins below
@@ -320,14 +509,7 @@ int wsh_main(int argc, char **argv) {
     int in;
 
 
-    // reinitialize the completions database
-    
-      // add commands from the path.
-
-      // then aliases
-
-      // then files from CWD
-
+    // cwd files
 
     if (!buffer) {
       endwin();
@@ -335,16 +517,11 @@ int wsh_main(int argc, char **argv) {
       exit(EXIT_FAILURE);
     }
 
-    int keyct = 0;
-
     for (;;) { // beginning of this = taking in another character
       in = getch();
       getsyx(cy,cx);
       if (in == EOF || in == '\n') {
         buffer[pos] = '\0';
-        printw("\n buffer contains %s\n", buffer);
-        printw("%d\n", pos);
-        printw("%d\n", keyct);
         h_push(h, buffer);
         refresh();
         break;
@@ -371,13 +548,11 @@ int wsh_main(int argc, char **argv) {
           }
           break;
 
-          // TODO -- completions, make sure everything tokens
-          // ---- and runs,
-          //   proper bang, change into home directory,
-          //   PATH recognition, alias, shortcuts
+          // TODO -- completions, PATH recognition, alias
 
         case KEY_UP:
           if(pos != 0 || buffer[0]) break;
+          if(!h->curr) break;
           int to_break = 1;
           int first_iter = 1;
 
@@ -475,10 +650,15 @@ int wsh_main(int argc, char **argv) {
         
         case KEY_STAB:
         case '\t':
+          refresh();
+          //char **tokens = wsh_tokenize(buffer);
+          //char *prefix = tokens[ppstrlen(tokens)-1];
+
+
+
           break;
         
         default:
-          keyct++;
           addch(in);
           buffer[pos] = in;
           pos++;
@@ -496,8 +676,6 @@ int wsh_main(int argc, char **argv) {
     }
     refresh();
 
-    continue;
-
     // tokenize 
     char **tokens = wsh_tokenize(buffer);
     char **argv = prep(tokens);
@@ -514,33 +692,42 @@ int wsh_main(int argc, char **argv) {
     int tokct = ppstrlen(tokens);
     int argc = ppstrlen(argv);
 
-    continue;
 
     // If the Token isn't empty
     if (tokens[0] != NULL) {
       if (strcmp(tokens[0], "exit") == 0) {
+        int ec = 0;
+        if (tokct == 2){
+          ec = atoi(tokens[1]);
+        } else if (tokct > 2) {
+          printw("\n\texit: syntax error -- too many arguments");
+          continue;
+        }
         cleanup_job_list(jobs_list);
-        exit(0);  // Exit Command
+        endwin();
+        exit(ec);  // Exit Command
+      } else if (strcmp(tokens[0], "clear") == 0) {
+        if (tokct > 1) {
+          printw("\n\tclear: syntax error -- doesn't take any arguments");
+        }
+        clear();
       } else if (strcmp(tokens[0], "cd") == 0) {
-        bin_cd(tokct, tokens);  // CD Command
+        bin_cd(tokct, tokens);   // CD
       } else if (strcmp(tokens[0], "ln") == 0) {
-        bin_ln(tokct, tokens);  // Link Command
+        bin_ln(tokct, tokens);   // Link
       } else if (strcmp(tokens[0], "rm") == 0) {
-        bin_rm(tokct, tokens);  // Remove Command
+        bin_rm(tokct, tokens);   // Remove
       } else if (strcmp(tokens[0], "jobs") == 0) {
-        bin_jobs(tokct, tokens);
+        bin_jobs(tokct, tokens); // Jobs
       } else if (strcmp(tokens[0], "fg") == 0) {
-        bin_fg(tokct, tokens);
+        bin_fg(tokct, tokens);   // fg
       } else if (strcmp(tokens[0], "bg") == 0) {
-        bin_bg(tokct, tokens);
+        bin_bg(tokct, tokens);   // bg
       } else {
         if (strcmp(ppstr_final(tokens), "&") == 0) {
-          // Enter Background Process (Don't Wait):
-          // execute(tokens, execv, 1);
+          execute(tokens, argv, 1);
         } else {
-          // All other commands get redirected to here
-          // execute(tokens, execv, 0);
-          // wait(NULL);
+          execute(tokens, argv, 0);
         }
       }
     }
@@ -554,34 +741,42 @@ int wsh_main(int argc, char **argv) {
       if (WIFEXITED(wstatus)) {
         // terminated normally
         remove_job_pid(jobs_list, wret);
-        if (fprintf(stdout,
-              "[%d] (%d) terminated with exit status %d\n", wjid,
+        if (printw( "\n[%d] (%d) terminated with exit status %d\n", wjid,
                     wret, WEXITSTATUS(wstatus)) < 0) {
+            endwin();
             fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
+            exit(-1);
           }
         }
         if (WIFSIGNALED(wstatus)) {
           // terminated by signal
           remove_job_pid(jobs_list, wret);
-          if (fprintf(stdout, "[%d] (%d) terminated by signal %d\n", wjid,
+          if (printw("\n[%d] (%d) terminated by signal %d\n", wjid,
                   wret, WTERMSIG(wstatus)) < 0) {
+            endwin();
             fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
+            exit(-1);
+
             }
         }
         if (WIFSTOPPED(wstatus)) {
           // stopped
           update_job_pid(jobs_list, wret, STOPPED);
-          if (fprintf(stdout, "[%d] (%d) suspended by signal %d\n", wjid,
+          if (printw("\n[%d] (%d) suspended by signal %d\n", wjid,
                         wret, WSTOPSIG(wstatus)) < 0) {
            
+            endwin();
             fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
+            exit(-1);
           }
         }
         if (WIFCONTINUED(wstatus)) {
               
           update_job_pid(jobs_list, wret, RUNNING);
-          if (fprintf(stdout, "[%d] (%d) resumed\n", wjid, wret) < 0) {
+          if (printw("\n[%d] (%d) resumed\n", wjid, wret) < 0) {
+            endwin();
             fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
+            exit(-1);
           }
         }
       }

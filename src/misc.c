@@ -20,13 +20,13 @@ extern int errno;
  */ 
 
 // 1 if is redirect token, 0 otherwise
-int is_redirect(char *str) {
-    return strcmp(str, "<") || strcmp(str, ">") || strcmp(str, ">>");
+int is_not_redirect(char *str) {
+    return strcmp(str, "<") && strcmp(str, ">") && strcmp(str, ">>");
 }
 
 // finds first nonredirect and returns it
 char *first_nonredirect(char *tokens[], char *prev) {
-    if (!is_redirect(tokens[0]) && !is_redirect(prev)) {
+    if (is_not_redirect(tokens[0]) && is_not_redirect(prev)) {
         return tokens[0];
     } else {
         return first_nonredirect(tokens + 1, tokens[0]);
