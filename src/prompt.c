@@ -315,7 +315,7 @@ void execute(char **tokens, char **argv,
 
         // Executes the command in the child process
         
-        execv(first_nonredirect(tokens, "\0"), argv);
+        execvp(first_nonredirect(tokens, "\0"), argv);
 
         perror("\n\texecv");
 
