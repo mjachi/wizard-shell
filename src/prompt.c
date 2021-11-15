@@ -446,12 +446,15 @@ int wsh_main(int argc, char **argv) {
   cbreak();
   keypad(stdscr, TRUE);
   refresh();
+  scrollok(stdscr, 1);
 
   // jobs init
+
   jobs_list = init_job_list();
   jcount = 0;
 
-  // Setting Up Signal Ignores in Parent:
+  // Setting up signal ignores in parent:
+
   signal(SIGINT, SIG_IGN);
   signal(SIGTSTP, SIG_IGN);
   signal(SIGTTOU, SIG_IGN);
@@ -499,10 +502,10 @@ int wsh_main(int argc, char **argv) {
     int cx;
     int cy;
 
-    if (printw(bang) == ERR) {
-        endwin();
-        fprintf(stderr, "{wsh @ REPL} -- unable to write to screen\n");
-        return -1;
+    if (printw(bang) == ERR) { // scuffed try catch for when we reach the bottom of the screen.
+      endwin();
+      fprintf(stderr, "{wsh @ REPL} -- unable to write to screen\n");
+      return -1;
     }
 
     h->curr = h->first;
