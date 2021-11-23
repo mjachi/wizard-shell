@@ -491,8 +491,15 @@ char *get_line(history* hist, TrieNode *completions) {
           // Any other cases should be left as is.
           break;
         case 67: // Right
+          if (pos < strlen(buffer)) {
+            putchar(buffer[pos++]);
+          }
           break;
         case 68: //Left
+          if (pos > 0) {
+            putchar('\b');
+            pos--;
+          }
           break;
       }
       continue;
