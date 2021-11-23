@@ -12,9 +12,9 @@
  * programs e.g. vim and julia!
  */
 
-void back_up_buffer(int);
-void clear_line_buffer(int,int);
-int getch();
+void back_up_buffer(int n);
+void clear_line_buffer(int len, int p);
+int getch(void);
 void whitespace(int n);
 
 #endif

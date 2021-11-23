@@ -25,7 +25,7 @@ TrieNode *tn_getNode(void) {
     if (pNode){
         int i;
  
-        pNode->isLeaf = false;
+        pNode->isLeaf = 0;
  
         for (i = 0; i < ALPHABET_S; i++)
             pNode->children[i] = NULL;
@@ -50,10 +50,10 @@ void tn_insert(TrieNode *root, const char *key){
     }
  
     // mark last node as leaf
-    pCrawl->isLeaf = true;
+    pCrawl->isLeaf = 1;
 }
  
-// Returns true if key presents in trie, else false
+// Returns 1 if key presents in trie, else 0
 int tn_search(struct TrieNode *root, const char *key){
     int length = strlen(key), i, index;
     struct TrieNode *pCrawl = root;
@@ -71,7 +71,7 @@ int tn_search(struct TrieNode *root, const char *key){
     return (pCrawl->isLeaf);
 }
 
-// Returns true if root has no children, else false
+// Returns 1 if root has no children, else 0
 int isEmpty(TrieNode* root){
     for (int i = 0; i < ALPHABET_S; i++)
         if (root->children[i])
@@ -86,7 +86,7 @@ TrieNode* tn_remove(TrieNode* root, char *key, int depth){
     }
  
     if (depth == strlen(key)) {
-        if (root->isLeaf) root->isLeaf = false;
+        if (root->isLeaf) root->isLeaf = 0;
         if (isEmpty(root)) free(root);
     }
     int index = key[depth] - 'a';

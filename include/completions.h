@@ -2,7 +2,6 @@
 #define WIZARD_SHELL_COMPLETIONS_H
 
 #include <stdlib.h>
-#include <ncurses.h>
 #include <string.h>
 
 #define ALPHABET_S 32 // size of alphabet

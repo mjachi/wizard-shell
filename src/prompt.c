@@ -1,7 +1,9 @@
 #include "prompt.h"
 #include "misc.h"
+#include "writeout.h"
 #include <dirent.h>
 #include <limits.h>
+#include <sys/utsname.h>
 
 #define _BSD_SOURCE
 #define _XOPEN_SORUCE 700
@@ -45,7 +47,7 @@ int bin_fg(int argc, char **argv) {
 
     tcsetpgrp(STDIN_FILENO, pid);
     if (kill(-1 * pid, SIGCONT) < 0) {
-        printf("\n\t{wsh @ bin_fg} -- ERROR in continuing the job");
+        printf("\n\t{wsh @ bin_fg} -- error in continuing the job");
         return -1;
     }
 
@@ -56,16 +58,16 @@ int bin_fg(int argc, char **argv) {
         }
         if (WIFSIGNALED(wstatus)) {
             remove_job_jid(jobs_list, jid);
-            if (printf("\n[%d] (%d) terminated by signal %d\n", jcount,
-                        wret, WTERMSIG(wstatus)) == ERR) {
-                printf("\n\t{wsh @ bin_fg} -- ERROR writing to output\n");
+            if (!printf("\n[%d] (%d) terminated by signal %d\n", jcount,
+                        wret, WTERMSIG(wstatus))) {
+                fprintf(stderr,"\n\t{wsh @ bin_fg} -- error writing to output\n");
             }
         }
         if (WIFSTOPPED(wstatus)) {
             update_job_jid(jobs_list, jid, STOPPED);
-            if (printw("\n\t[%d] (%d) suspended by signal %d\n", jcount,
-                        wret, WSTOPSIG(wstatus)) == ERR) {
-                printw("\n\t{wsh @ bin_fg} -- ERROR writing to output\n");
+            if (!printf("\n\t[%d] (%d) suspended by signal %d\n", jcount,
+                        wret, WSTOPSIG(wstatus))) {
+                fprintf(stderr,"\n\t{wsh @ bin_fg} -- error writing to output\n");
             }
         }
     }
@@ -77,24 +79,24 @@ int bin_fg(int argc, char **argv) {
 int bin_bg(int argc, char **argv) {
     // Checks that there's at least 1 arguments after the ln string
     if (argc != 2) {
-        printw("\n\tbg: syntax error -- requires exactly one argument\n");
+        printf("\n\tbg: syntax error -- requires exactly one argument\n");
         return -1;
     }
 
     if (argv[1][0] != '%') {
-        printw("\n\tbg: job input does not begin with %%\n");
+        printf("\n\tbg: job input does not begin with %%\n");
         return -1;
     }
 
     int jid = atoi(argv[1] + 1);
     pid_t pid = get_job_pid(jobs_list, jid);
     if (pid < 0) {
-        printw("\n\tjob not found\n");
+        printf("\n\t{wsh @ bg} -- job not found with code %d\n", pid);
         return -1;
     }
 
     if (kill(-1 * pid, SIGCONT) < 0) {
-        printw("\n\tERROR in continuing the job");
+        printf("\n\t{wsh @ bg} -- error in continuing the job");
         return -1;
     }
 
@@ -104,7 +106,7 @@ int bin_bg(int argc, char **argv) {
 
 int bin_jobs(int argc, char **argv) {
     if (argc != 1) {
-        printw("\n\tjobs: syntax error -- too many arguments; doesn't take any\n");
+        printf("\n\tjobs: syntax error -- too many arguments; doesn't take any\n");
         return -1;
     }
 
@@ -123,7 +125,6 @@ char **wsh_tokenize(char *line) {
 
   if (!tokens) {
     fprintf(stderr, "{wsh @ tokenize} -- error allocating for buffer");
-    endwin();
     exit(EXIT_FAILURE);
   }
 
@@ -137,7 +138,6 @@ char **wsh_tokenize(char *line) {
       tokens = realloc(tokens, bufsize * sizeof(char*));
       if (!tokens) {
         fprintf(stderr, "{wsh @ tokenize} -- error allocating for buffer");
-        endwin();
         exit(EXIT_FAILURE);
       }
     }
@@ -200,6 +200,8 @@ void execute(char **tokens, char **argv,
     int pipefd[2];
     pipe(pipefd);
 
+    // TODO -- undo this if needed?
+
     int store_errno = 0;
 
     // find redirection symbols
@@ -209,11 +211,11 @@ void execute(char **tokens, char **argv,
           input = tokens[i + 1];
             
           if (input == NULL) {
-            printw("\n\t{wsh @ execute} -- no input file specified\n");
+            printf("\n\t{wsh @ execute} -- no input file specified\n");
             return;
           }
         } else {
-            printw("\n\t{wsh @ execute} -- syntax error: multiple input files\n");
+            printf("\n\t{wsh @ execute} -- syntax error: multiple input files\n");
             return;
         }
 
@@ -223,13 +225,13 @@ void execute(char **tokens, char **argv,
         if (strcmp(clobber, "\0") == 0) {
             clobber = tokens[i + 1];
             if (clobber == NULL) {
-                printw("\n\t{wsh @ execute} -- no output file specified\n");
+                printf("\n\t{wsh @ execute} -- no output file specified\n");
                 return;
                 }
             } else {
                 // If it is, then we have multiple of the same redirection
                 // symbols
-                printw("\n\t{wsh @ execute} -- syntax error: multiple output files\n");
+                printf("\n\t{wsh @ execute} -- syntax error: multiple output files\n");
                 return;
             }
 
@@ -237,18 +239,18 @@ void execute(char **tokens, char **argv,
             if (strcmp(dclobber, "\0") == 0) {
                 dclobber = tokens[i + 1];
                 if (dclobber == NULL) {
-                    printw("\n\t{wsh @ execute} -- no output file specified\n");
+                    printf("\n\t{wsh @ execute} -- no output file specified\n");
                     return;
                 }
             } else {
-                printw("\n\t{wsh @ execute} -- syntax error: multiple output files\n");
+                printf("\n\t{wsh @ execute} -- syntax error: multiple output files\n");
                 return;
             }
         }
     }
 
     if (strcmp(clobber, "\0") != 0 && strcmp(dclobber, "\0") != 0) {
-        printw("\n\t{wsh @ execute}syntax error: multiple output files\n");
+        printf("\n\t{wsh @ execute}syntax error: multiple output files\n");
         return;
     }
 
@@ -280,13 +282,11 @@ void execute(char **tokens, char **argv,
 
         if (strcmp(input, "\0") != 0) {
             if (close(STDIN_FILENO) < 0) {
-                endwin();
                 fprintf(stderr, "\n\t{wsh @ execute} -- error closing standard input\n");
                 exit(1);
             }
 
             if (open(input, O_RDONLY) < 0) {
-                endwin();
                 fprintf(stderr, "\n\t{wsh @ execute} -- error opening input file\n");
                 exit(1);
             }
@@ -294,14 +294,12 @@ void execute(char **tokens, char **argv,
 
         if (strcmp(output, "\0") != 0) {
             if (close(STDOUT_FILENO) < 0) {
-               endwin();
                fprintf(stderr, "\n\t{wsh @ execute} -- error closing standard output\n");
                 exit(1);
             }
 
             if (is_output_double) {
                 if (open(output, O_RDWR | O_CREAT | O_APPEND, 00600) < 0) {
-                    endwin();
                     fprintf(stderr, "\n\t{wsh @ execute} -- error opening output file\n");
                     exit(1);
                 }
@@ -328,8 +326,8 @@ void execute(char **tokens, char **argv,
     if (is_background) {
 
         add_job(jobs_list, ++jcount, pid, RUNNING, first_nonredirect(tokens, "\0"));
-        if (printf("\n[%d] (%d)\n", jcount, pid) == ERR) {
-            printf("\n\t{wsh @ execute} -- error writing to output\n");
+        if (!printf("\n[%d] (%d)\n", jcount, pid)) {
+            fprintf(stderr,"\n\t{wsh @ execute} -- error writing to output\n");
         }
 
     } else {
@@ -340,16 +338,16 @@ void execute(char **tokens, char **argv,
             if (WIFSIGNALED(wstatus)) {
                 // terminated by a signal
                 jcount = jcount + 1;
-                if (printf("\n[%d] (%d) terminated by signal %d\n",
-                            jcount, wret, WTERMSIG(wstatus)) == ERR) {
-                    printf("\n\t{wsh @ execute} -- error writing to output\n");
+                if (!printf("\n[%d] (%d) terminated by signal %d\n",
+                            jcount, wret, WTERMSIG(wstatus))) {
+                    fprintf(stderr,"\n\t{wsh @ execute} -- error writing to output\n");
                 }
             }
             if (WIFSTOPPED(wstatus)) {
                 add_job(jobs_list, ++jcount, pid, STOPPED, first_nonredirect(tokens, "\0"));
-                if (printf("\n[%d] (%d) suspended by signal %d\n",
-                            jcount, wret, WSTOPSIG(wstatus)) == ERR) {
-                    printf("\n\t{wsh @ execute} -- error writing to output\n");
+                if (!printf("\n[%d] (%d) suspended by signal %d\n",
+                            jcount, wret, WSTOPSIG(wstatus))) {
+                    fprintf(stderr,"\n\t{wsh @ execute} -- error writing to output\n");
                 }
             }
         }
@@ -371,36 +369,6 @@ void execute(char **tokens, char **argv,
 
     }
 } 
-/* sigint_handler
- * Respond to SIGINT signal (CTRL-C)
- *
- * Argument: int sig - the integer code representing this signal
- */
-void sigint_handler(int sig) {
-  write(STDOUT_FILENO, "\nread a SIGINT\n", 15);
-  return;
-}
-
-/* sigtstp_handler
- * Respond to SIGTSTP signal (CTRL-Z)
- *
- * Argument: int sig - the integer code representing this signal
- */
-void sigtstp_handler(int sig) {
-  write(STDOUT_FILENO, "\nread a SIGTSTP\n", 16);
-  exit(0);
-  return;
-}
-
-/* sigquit_handler
- * Catches SIGQUIT signal (CTRL-\)
- *
- * Argument: int sig - the integer code representing this signal
- */
-void sigquit_handler(int sig) {
-  write(STDOUT_FILENO, "\nread a SIGQUIT\n", 16);
-  return;
-}
 
 /**
  * splash
@@ -408,11 +376,10 @@ void sigquit_handler(int sig) {
  * just a "pretty"-fying function that prints a splash screen with some info.
  */
 int splash() {
-  int ret = 0;
-  FILE *mural_ptr = fopen("../mural.txt", "r");
-  if (!mural_ptr) {
+  FILE *mural_ptr = fopen("mural.txt", "r");
+  if (mural_ptr == NULL) {
     printf("Skipping splash; failed to find mural.txt");
-    ret = -1;
+    return -1;
   }
 
   int c;
@@ -420,11 +387,143 @@ int splash() {
     putchar(c);
   }
   fclose(mural_ptr);
-  printw("wsh (:wizard: shell) \n\n\n");
-
-  refresh();
   
-  return ret;
+
+  struct utsname unameData;
+  int ret = uname(&unameData);
+  
+  if (ret) {
+    printf("wsh (:wizard: shell)");
+    return ret;
+  }
+
+  printf("wsh (:wizard: shell) on %s running %s, \n\n", unameData.nodename, unameData.release);
+  
+  return 0;
+}
+
+
+// get_line
+//
+// meant to abstract away the line reading behavior.
+// After this, we resolve alias's. Requires access to history
+// and completions tree.
+char *get_line(history* hist, TrieNode *completions) {
+  int bufsize = RL_BFS;
+  int pos = 0;
+  char *buffer = malloc(sizeof(char) * bufsize);
+  char c;
+  hist->curr = NULL;
+  int hist_iter = 0;
+
+  if (!buffer) {
+    fprintf(stderr, "{wsh @ get_line} -- buffer allocation error\n");
+    exit(EXIT_FAILURE);
+  }
+
+  for (;;) {
+    c = getch();
+    if (c == EOF || c == '\n') { // when user hits enter
+      buffer[pos] = '\0';
+      if (strlen(buffer) > 0) {
+        if (hist->count > 0 && strcmp(buffer, hist->first->command)) {
+          h_push(hist,buffer);
+        } else if (hist->count == 0) {
+          h_push(hist, buffer);
+        }
+      }
+      printf("\n %d \n", h_length(hist));
+      return buffer;
+    } else if (c == 27 && getch() == 91) { // arrow keys
+      switch (getch()){ // Platform specific
+        case 65: // Up
+          if (!hist->first) {
+            break;
+          } else if (hist_iter == 0 && hist->first) {
+            // Clear buffer && line
+            clear_line_buffer(strlen(buffer),pos);
+            memset(buffer, 0, sizeof(buffer));
+            // Copy command into buffer
+            char *hcm = hist->first->command;
+            strcpy(buffer, hcm);
+            // Set frontend accordingly
+            printf("%s",hcm);
+            pos = strlen(hcm);
+            // Increment
+            hist->curr = hist->first;
+            hist_iter = 1;
+          } else if (hist->curr->next) {
+            // Clear buffer && line
+            clear_line_buffer(strlen(buffer), pos);
+            memset(buffer, 0, sizeof(buffer));
+            // Copy command into buffer
+            char *hcm = hist->curr->next->command;
+            strcpy(buffer, hcm);
+            // Set frontend accordingly
+            printf("%s", hcm);
+            pos = strlen(hcm);
+            // Increment
+            hist->curr = hist->curr->next;
+          }
+          // Any other cases should be left as is.
+          break;
+        case 66: // Down
+          if (hist_iter == 0 || !hist->first) {
+            break;
+          } else if (hist->curr->prev) {
+            // Clear buffer && line
+            clear_line_buffer(strlen(buffer), pos);
+            memset(buffer, 0, sizeof(buffer));
+            // Copy command into buffer
+            char *hcm = hist->curr->prev->command;
+            strcpy(buffer, hcm);
+            // Set frontend accordingly
+            printf("%s",hcm);
+            pos = strlen(hcm);
+            // Decrement
+            hist->curr = hist->curr->prev;
+          } else if (!hist->curr->prev && strlen(buffer) > 0) {
+            // Clear buffer && line
+            clear_line_buffer(strlen(buffer), pos);
+            memset(buffer, 0, sizeof(buffer));
+            pos = 0;
+          }
+          // Any other cases should be left as is.
+          break;
+        case 67: // Right
+          break;
+        case 68: //Left
+          break;
+      }
+      continue;
+    } else if (c == '\t' || c == 9) {
+      // TAB for completion... if not particular, inputs \t
+      continue;
+    } else if (c == 127 && pos > 0) {
+      // Backspace character
+      
+      continue;
+    } else {
+      buffer[pos] = c;
+      putchar(c);
+    }
+
+    pos++;
+    if (fflush(stdout) < 0) {
+      fprintf(stderr, "{wsh @ get_line} -- could not flush stdout");
+      exit(EXIT_FAILURE);
+    }
+
+    if (pos >= bufsize) {
+      bufsize += RL_BFS;
+      buffer = realloc(buffer, bufsize);
+      if (!buffer) {
+        fprintf(stderr, "{wsh @ get_line} -- could not resize buffer\n");
+        exit(EXIT_FAILURE);
+      }
+    }
+  }
+  return NULL;
 }
 
 
@@ -438,7 +537,7 @@ int wsh_main(int argc, char **argv) {
   ssize_t count;
 
   // splash screen
-  // splash(); 
+  splash(); 
   
   // jobs init
 
@@ -453,15 +552,15 @@ int wsh_main(int argc, char **argv) {
 
   // set up completions tree
 
-  TrieNode *root = tn_getNode();
-  tn_insert(root, "cd");
-  tn_insert(root, "ln");
-  tn_insert(root, "bg");
-  tn_insert(root, "rm");
-  tn_insert(root, "jobs");
-  tn_insert(root, "fg");
-  tn_insert(root, "testforcompletions");
-  tn_insert(root, "foobazbarbar");
+  TrieNode *completions = tn_getNode();
+  tn_insert(completions, "cd");
+  tn_insert(completions, "ln");
+  tn_insert(completions, "bg");
+  tn_insert(completions, "rm");
+  tn_insert(completions, "jobs");
+  tn_insert(completions, "fg");
+  tn_insert(completions, "testforcompletions");
+  tn_insert(completions, "foobazbarbar");
 
   // Init the history data structures
   
@@ -478,208 +577,54 @@ int wsh_main(int argc, char **argv) {
   char *home = getenv("HOME");
   char *uid = getenv("USER");
 
+  if (!uid) {
+    uid = "user";
+  }
+
+  if (!home) {
+    home = "/";
+  }
+
   char bang[80];
   char cwd[20];
   strcpy(bang, "\n");
   strcat(bang, uid);
-  strcat(bang, " @ wsh %% ");
+  strcat(bang, " @ wsh % ");
+
+  // Start in user's home directory
+  
+
+  // TODO -- chdir
+  if (chdir(home) < 0) {
+    perror("{wsh @ init chdir}");
+  }
  
 
   // REPL begins below
 
   for (;;) { // beginning of this = new command
     
-    // reset everything
-
-    if (printw(bang) == ERR) { // scuffed try catch for when we reach the bottom of the screen.
-      endwin();
+    if (printf("%s",bang) < 0) { // scuffed try catch for when we reach the bottom of the screen.
       fprintf(stderr, "{wsh @ REPL} -- unable to write to screen\n");
+      return -1;
+    }
+
+    if (fflush(stdout) < 0) {
+      fprintf(stderr, "{wsh @ REPL} -- unable to flush stdout\n");
       return -1;
     }
 
     h->curr = h->first;
 
-    int bfs = RL_BFS;
-    int pos = 0;
-    // dynamically allocated buffer for longer lines/ paths
-    char *buffer = malloc(sizeof(char) * bfs);
-    int in;
+    char *buffer = get_line(h, completions);
 
-    // cwd files
-    //DIR *d
-    //struct dirent *dir;
-    //d = opendir()
-
-    if (!buffer) {
-      endwin();
-      fprintf(stderr, "{wsh @ REPL} -- error allocating for buffer");
-      exit(EXIT_FAILURE);
-    }
-
-    for (;;) { // beginning of this = taking in another character
-      in = getch();
-      getsyx(cy,cx);
-      if (in == EOF || in == '\n') {
-        buffer[pos] = '\0';
-        h_push(h, buffer);
-        refresh();
-        break;
-      }
-
-      char *hist_comm;
-      int t;
-
-      switch (in) {
-        case EOF:
-        case '\n':
-          buffer[pos] = '\0';
-          refresh();
-          break;
-        case 127:
-        case KEY_BACKSPACE:
-        case KEY_DC:
-          if (pos > 0){ // busted if you try to delete in the middle of the string
-            move(cy, --cx);
-            buffer[--pos] = '\0';
-          }
-          break;
-
-          // TODO -- PATH recognition, alias
-
-        case KEY_UP:
-          if(pos != 0 || buffer[0]) break;
-          if(!h->curr) break;
-          int to_break = 1;
-          int first_iter = 1;
-
-          while (to_break) {
-            t = first_iter ? KEY_UP : getch();
-            
-            switch (t) {
-              case EOF:
-              case '\n':
-                to_break=0;
-                break;
-              case KEY_UP:
-                // if there's already a command there
-                while (pos > 0) {
-                  buffer[pos] = '\0';
-                  pos--;
-                } // delete key behavior until buffer is clear
-                refresh();
-                // cursor now at the bang in theory
-
-                // history commands
-                // - Move curr to next if there is.
-                if (!first_iter && h->curr->next) { 
-                  h->curr = h->curr->next;
-                }
-                // - Get current history step
-                hist_comm = h->curr->command;
-
-                // copy hist comm into buffer
-                strcpy(buffer, hist_comm);
-                // adjust position appropriately
-                pos = strlen(hist_comm);
-
-                // print as desired
-                printw("%s", buffer);
-                refresh();
-
-                break; // end of KEYUP for dialogue
-              
-              case KEY_DOWN:
-                // if there's already a command there
-                while (pos > 0) {
-                  move(cy,--cx);
-                  delch();
-                  buffer[pos] = '\0';
-                  pos--;
-                } // delete key behavior until buffer is clear
-                refresh();
-                // cursor now at the bang in theory
-
-                // history commands
-                // - Move curr to if there is.
-                if (h->curr->prev){
-                  h->curr = h->curr->prev;
-                }
-                // - Get current history step
-                hist_comm = h->curr->command;
-
-                // copy hist comm into buffer
-                strcpy(buffer, hist_comm);
-                // adjust position appropriately
-                pos = strlen(hist_comm);
-
-                // print as desired
-                printw("%s", buffer);
-                refresh();
-                break; // end of KEYDOWN for dialogue
-                
-            } // end of switch for dialogue
-            first_iter = 0;
-          } // end of while for dialogue
-          break; // end of KEYUP for REPL
-
-        case KEY_DOWN:
-          break;
-        
-        case KEY_LEFT:
-          if (pos >= 0) {
-            move(cy,--cx);
-          }
-          break;
-        
-        case KEY_RIGHT:
-          getsyx(cy,cx);
-          if (cx < pos){
-            move(cy,++cx);
-          }
-          refresh();
-          break;
-        
-        case KEY_STAB: // currently only a single word.
-        case '\t':
-          if(pos == 0) {
-            break;
-          }
-          char *temp = strrchr(buffer,' ');
-          char *prefix = temp-1 ? buffer : temp;
-          char *sugg = completionOf(root, prefix);
-          while (pos > 0) {
-            move(cy,--cx);
-            delch();
-            pos--;
-          } // delete key behavior until buffer is clear
-
-          printf("%s",sugg);
-          pos += strlen(sugg);
-
-          break;
-        
-        default:
-          addch(in);
-          buffer[pos] = in;
-          pos++;
-      }
-
-      if (pos >= bfs) {
-        bfs+=RL_BFS;
-        buffer = realloc(buffer, bfs);
-        if (!buffer) {
-          fprintf(stderr, "\n{wsh @ REPL} -- error allocating for buffer");
-          continue;
-        }
-      }
-    }
-    refresh();
-
+    printf("\n%s\n", buffer);
+    continue;
     // tokenize 
     char **tokens = wsh_tokenize(buffer);
     char **argv = prep(tokens);
     
-    //if (tokens[0]) tn_insert(root, tokens[0]);
+    //if (tokens[0]) tn_insert(completions, tokens[0]);
 
     if (!tokens){
       // if error while parsing
@@ -694,7 +639,12 @@ int wsh_main(int argc, char **argv) {
     int tokct = ppstrlen(tokens);
     int argc = ppstrlen(argv);
 
-    // If the Token isn't empty
+    if (tokct == 0) {
+      // might as well not continue with this iteration.
+      continue;
+    }
+
+    // TODO -- builtin hashtable
     if (tokens[0] != NULL) {
       if (strcmp(tokens[0], "exit") == 0) {
         int ec = 0;
@@ -710,7 +660,7 @@ int wsh_main(int argc, char **argv) {
         if (tokct > 1) {
           printf("\n\tclear: syntax error -- doesn't take any arguments");
         }
-        clear();
+        // TODO -- clear
       } else if (strcmp(tokens[0], "cd") == 0) {
         bin_cd(tokct, tokens);   // CD
       } else if (strcmp(tokens[0], "ln") == 0) {
@@ -752,7 +702,6 @@ int wsh_main(int argc, char **argv) {
           remove_job_pid(jobs_list, wret);
           if (printf("\n[%d] (%d) terminated by signal %d\n", wjid,
                   wret, WTERMSIG(wstatus)) < 0) {
-            endwin();
             fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
             exit(-1);
 
@@ -781,7 +730,6 @@ int wsh_main(int argc, char **argv) {
   }
 
   cleanup_job_list(jobs_list);
-  endwin();
   return 0;
 } 
 

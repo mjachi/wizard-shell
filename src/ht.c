@@ -186,7 +186,6 @@ void* ht_get(HashTable* ht, const char *key){
   assert(key);
 
   size_t i = (size_t) (ht_hash(key) & (uint64_t)(ht->size-1)); 
-  // TODO -- does cast or bitwise cause issue?
   // idea is to take hash and cast to something we can index with
   
   while (ht->entries[i].key) {
