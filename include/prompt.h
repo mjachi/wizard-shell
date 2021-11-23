@@ -19,7 +19,6 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <stdio.h>
-#include <ncurses.h>
 
 #include "history.h"
 #include "completions.h"

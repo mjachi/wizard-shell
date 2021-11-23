@@ -27,25 +27,25 @@ int jcount;
 
 int bin_fg(int argc, char **argv) {
     if (argc != 2) {
-        printw("\n\tfg: syntax error -- requires exactly one argument");
+        printf("\n\tfg: syntax error -- requires exactly one argument");
         return -1;
     }
 
     if (argv[1][0] != '%') {
-        printw("\n\tfg: job input does not begin with %%\n");
+        printf("\n\tfg: job input does not begin with %%\n");
         return -1;
     }
 
     int jid = atoi(argv[1] + 1);
     pid_t pid = get_job_pid(jobs_list, jid);
     if (pid < 0) {
-        printw("\n\tjob not found\n");
+        printf("\n\tjob not found\n");
         return -1;
     }
 
     tcsetpgrp(STDIN_FILENO, pid);
     if (kill(-1 * pid, SIGCONT) < 0) {
-        printw("\n\t{wsh @ bin_fg} -- ERROR in continuing the job");
+        printf("\n\t{wsh @ bin_fg} -- ERROR in continuing the job");
         return -1;
     }
 
@@ -56,9 +56,9 @@ int bin_fg(int argc, char **argv) {
         }
         if (WIFSIGNALED(wstatus)) {
             remove_job_jid(jobs_list, jid);
-            if (printw("\n[%d] (%d) terminated by signal %d\n", jcount,
+            if (printf("\n[%d] (%d) terminated by signal %d\n", jcount,
                         wret, WTERMSIG(wstatus)) == ERR) {
-                printw("\n\t{wsh @ bin_fg} -- ERROR writing to output\n");
+                printf("\n\t{wsh @ bin_fg} -- ERROR writing to output\n");
             }
         }
         if (WIFSTOPPED(wstatus)) {
@@ -321,16 +321,15 @@ void execute(char **tokens, char **argv,
 
         /* we won’t get here unless execv failed */
         char *error = strerror(errno);
-        //endwin();
-        printw("\n\texecv: %s",error);
+        printf("\n\texecv: %s",error);
         exit(1);
     }
 
     if (is_background) {
 
         add_job(jobs_list, ++jcount, pid, RUNNING, first_nonredirect(tokens, "\0"));
-        if (printw("\n[%d] (%d)\n", jcount, pid) == ERR) {
-            printw("\n\t{wsh @ execute} -- error writing to output\n");
+        if (printf("\n[%d] (%d)\n", jcount, pid) == ERR) {
+            printf("\n\t{wsh @ execute} -- error writing to output\n");
         }
 
     } else {
@@ -341,16 +340,16 @@ void execute(char **tokens, char **argv,
             if (WIFSIGNALED(wstatus)) {
                 // terminated by a signal
                 jcount = jcount + 1;
-                if (printw("\n[%d] (%d) terminated by signal %d\n",
+                if (printf("\n[%d] (%d) terminated by signal %d\n",
                             jcount, wret, WTERMSIG(wstatus)) == ERR) {
-                    printw("\n\t{wsh @ execute} -- error writing to output\n");
+                    printf("\n\t{wsh @ execute} -- error writing to output\n");
                 }
             }
             if (WIFSTOPPED(wstatus)) {
                 add_job(jobs_list, ++jcount, pid, STOPPED, first_nonredirect(tokens, "\0"));
-                if (printw("\n[%d] (%d) suspended by signal %d\n",
+                if (printf("\n[%d] (%d) suspended by signal %d\n",
                             jcount, wret, WSTOPSIG(wstatus)) == ERR) {
-                    printw("\n\t{wsh @ execute} -- error writing to output\n");
+                    printf("\n\t{wsh @ execute} -- error writing to output\n");
                 }
             }
         }
@@ -360,12 +359,12 @@ void execute(char **tokens, char **argv,
 
         if (store_errno != 0) {
           char *error = strerror(errno);
-          printw("\n\t {wsh @ execv} -- %s", error);
+          printf("\n\t {wsh @ execv} -- %s", error);
         } else {
           char buffer[2048];
           close(pipefd[1]);
           while (read(pipefd[0], buffer, sizeof(buffer))!=0) {
-            printw("\n %s", buffer);
+            printf("\n %s", buffer);
           }
         }
 
@@ -412,7 +411,7 @@ int splash() {
   int ret = 0;
   FILE *mural_ptr = fopen("../mural.txt", "r");
   if (!mural_ptr) {
-    printw("Skipping splash; failed to find mural.txt");
+    printf("Skipping splash; failed to find mural.txt");
     ret = -1;
   }
 
@@ -441,13 +440,6 @@ int wsh_main(int argc, char **argv) {
   // splash screen
   // splash(); 
   
-  WINDOW* w = initscr();
-  noecho();
-  cbreak();
-  keypad(stdscr, TRUE);
-  refresh();
-  scrollok(stdscr, 1);
-
   // jobs init
 
   jobs_list = init_job_list();
@@ -498,9 +490,6 @@ int wsh_main(int argc, char **argv) {
   for (;;) { // beginning of this = new command
     
     // reset everything
-    refresh();
-    int cx;
-    int cy;
 
     if (printw(bang) == ERR) { // scuffed try catch for when we reach the bottom of the screen.
       endwin();
@@ -550,11 +539,8 @@ int wsh_main(int argc, char **argv) {
         case KEY_BACKSPACE:
         case KEY_DC:
           if (pos > 0){ // busted if you try to delete in the middle of the string
-            getsyx(cy, cx);
             move(cy, --cx);
-            delch();
             buffer[--pos] = '\0';
-            refresh();
           }
           break;
 
@@ -569,7 +555,6 @@ int wsh_main(int argc, char **argv) {
           while (to_break) {
             t = first_iter ? KEY_UP : getch();
             
-            getsyx(cy,cx);
             switch (t) {
               case EOF:
               case '\n':
@@ -578,8 +563,6 @@ int wsh_main(int argc, char **argv) {
               case KEY_UP:
                 // if there's already a command there
                 while (pos > 0) {
-                  move(cy,--cx);
-                  delch();
                   buffer[pos] = '\0';
                   pos--;
                 } // delete key behavior until buffer is clear
@@ -644,9 +627,7 @@ int wsh_main(int argc, char **argv) {
         
         case KEY_LEFT:
           if (pos >= 0) {
-            getsyx(cy,cx);
             move(cy,--cx);
-            refresh();
           }
           break;
         
@@ -663,8 +644,6 @@ int wsh_main(int argc, char **argv) {
           if(pos == 0) {
             break;
           }
-          refresh();
-          getsyx(cy,cx);
           char *temp = strrchr(buffer,' ');
           char *prefix = temp-1 ? buffer : temp;
           char *sugg = completionOf(root, prefix);
@@ -674,12 +653,9 @@ int wsh_main(int argc, char **argv) {
             pos--;
           } // delete key behavior until buffer is clear
 
-          printw("%s",sugg);
+          printf("%s",sugg);
           pos += strlen(sugg);
-          //printw("\n\n%d\n\n", pos);
 
-          refresh();
-          
           break;
         
         default:
@@ -725,15 +701,14 @@ int wsh_main(int argc, char **argv) {
         if (tokct == 2){
           ec = atoi(tokens[1]);
         } else if (tokct > 2) {
-          printw("\n\texit: syntax error -- too many arguments");
+          printf("\n\texit: syntax error -- too many arguments");
           continue;
         }
         cleanup_job_list(jobs_list);
-        endwin();
         exit(ec);  // Exit Command
       } else if (strcmp(tokens[0], "clear") == 0) {
         if (tokct > 1) {
-          printw("\n\tclear: syntax error -- doesn't take any arguments");
+          printf("\n\tclear: syntax error -- doesn't take any arguments");
         }
         clear();
       } else if (strcmp(tokens[0], "cd") == 0) {
@@ -766,9 +741,8 @@ int wsh_main(int argc, char **argv) {
       if (WIFEXITED(wstatus)) {
         // terminated normally
         remove_job_pid(jobs_list, wret);
-        if (printw( "\n[%d] (%d) terminated with exit status %d\n", wjid,
+        if (printf( "\n[%d] (%d) terminated with exit status %d\n", wjid,
                     wret, WEXITSTATUS(wstatus)) < 0) {
-            endwin();
             fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
             exit(-1);
           }
@@ -776,7 +750,7 @@ int wsh_main(int argc, char **argv) {
         if (WIFSIGNALED(wstatus)) {
           // terminated by signal
           remove_job_pid(jobs_list, wret);
-          if (printw("\n[%d] (%d) terminated by signal %d\n", wjid,
+          if (printf("\n[%d] (%d) terminated by signal %d\n", wjid,
                   wret, WTERMSIG(wstatus)) < 0) {
             endwin();
             fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
@@ -787,10 +761,9 @@ int wsh_main(int argc, char **argv) {
         if (WIFSTOPPED(wstatus)) {
           // stopped
           update_job_pid(jobs_list, wret, STOPPED);
-          if (printw("\n[%d] (%d) suspended by signal %d\n", wjid,
+          if (printf("\n[%d] (%d) suspended by signal %d\n", wjid,
                         wret, WSTOPSIG(wstatus)) < 0) {
            
-            endwin();
             fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
             exit(-1);
           }
@@ -798,8 +771,7 @@ int wsh_main(int argc, char **argv) {
         if (WIFCONTINUED(wstatus)) {
               
           update_job_pid(jobs_list, wret, RUNNING);
-          if (printw("\n[%d] (%d) resumed\n", wjid, wret) < 0) {
-            endwin();
+          if (printf("\n[%d] (%d) resumed\n", wjid, wret) < 0) {
             fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
             exit(-1);
           }
