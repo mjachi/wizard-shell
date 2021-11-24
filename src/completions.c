@@ -1,4 +1,5 @@
 #include "completions.h"
+#include <stdio.h>
 
 /** completions.c
  *
@@ -109,18 +110,17 @@ int isLastNode (TrieNode* root) {
 }
 
 // returns the first completion found
-char *suggestionsRec (TrieNode *root, char *prefix, int app) {
+char *suggestionsRec (TrieNode *root, char *prefix) {
   if (root->isLeaf) return prefix;
   if (isLastNode(root)) return prefix;
-
+  
   for (int i = 0; i < ALPHABET_S; i++) {
     if (root->children[i]) {
       char str[2];
       str[0] = 97+i;
       str[1] = '\0';
-
-      if (app) strcat(prefix, str);
-      suggestionsRec(root->children[i], prefix, 1);
+      
+      return suggestionsRec(root->children[i], strcat(prefix, str));
     }
   }
   return prefix; 
@@ -133,7 +133,8 @@ char *completionOf (TrieNode *root, char *prefix) {
   TrieNode *pCrawl = root;
   int len = strlen(prefix); 
 
-  for (int i = 0; i+1 < len; i++) {
+  // traverse the tree as far as possible.
+  for (int i = 0; i < len; i++) {
     int index = CHAR_TO_INDEX(prefix[i]);
     if (!pCrawl->children[index]) {
       return prefix;
@@ -143,17 +144,13 @@ char *completionOf (TrieNode *root, char *prefix) {
 
   int is_leaf = (pCrawl->isLeaf);
   int is_last = isLastNode(pCrawl);
-
-  if (is_leaf && is_last) {
+  
+  if (is_leaf && is_last) { // word is completed.
     return prefix;
-  } else if (!is_last) {
-    return suggestionsRec(pCrawl, prefix,0);
+  } else if (!is_last) { // is not complete.
+    return suggestionsRec(pCrawl, prefix);
   }
 
-  return NULL;
+  return prefix;
 }
-
-
-
-
 

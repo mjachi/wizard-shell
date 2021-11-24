@@ -197,11 +197,6 @@ void execute(char **tokens, char **argv,
     char *clobber = "\0";  // for ">"
     char *dclobber = "\0";  // for ">>"
 
-    int pipefd[2];
-    pipe(pipefd);
-
-    // TODO -- undo this if needed?
-
     int store_errno = 0;
 
     // find redirection symbols
@@ -267,13 +262,6 @@ void execute(char **tokens, char **argv,
             tcsetpgrp(STDIN_FILENO, pid);
         }
 
-        close(pipefd[0]);
-
-        dup2(pipefd[1],1);
-        dup2(pipefd[1],2);
-
-        close(pipefd[1]);
-
         // for parent
         signal(SIGINT, SIG_DFL);
         signal(SIGTSTP, SIG_DFL);
@@ -316,10 +304,6 @@ void execute(char **tokens, char **argv,
         execvp(first_nonredirect(tokens, "\0"), argv);
 
         perror("\n\texecv");
-
-        /* we won’t get here unless execv failed */
-        char *error = strerror(errno);
-        printf("\n\texecv: %s",error);
         exit(1);
     }
 
@@ -358,15 +342,7 @@ void execute(char **tokens, char **argv,
         if (store_errno != 0) {
           char *error = strerror(errno);
           printf("\n\t {wsh @ execv} -- %s", error);
-        } else {
-          char buffer[2048];
-          close(pipefd[1]);
-          while (read(pipefd[0], buffer, sizeof(buffer))!=0) {
-            printf("\n %s", buffer);
-          }
         }
-
-
     }
 } 
 
@@ -425,14 +401,23 @@ char *get_line(history* hist, TrieNode *completions) {
     c = getch();
     if (c == EOF || c == '\n') { // when user hits enter
       buffer[pos] = '\0';
+
       if (strlen(buffer) > 0) {
+        /**
+         * We only want to consider adding nonempty strings to the history
+         * LL. Then, we also don't want to add repeats (ie, if the current
+         * buffer matches the most recent command don't add it); this 
+         * presents some obvious issues w.r.t. seg-faulting if we try 
+         * to check the first command when the history is empty, hence
+         * this grossly nested block of conditionals
+         */
+
         if (hist->count > 0 && strcmp(buffer, hist->first->command)) {
           h_push(hist,buffer);
         } else if (hist->count == 0) {
           h_push(hist, buffer);
         }
       }
-      printf("\n %d \n", h_length(hist));
       return buffer;
     } else if (c == 27 && getch() == 91) { // arrow keys
       switch (getch()){ // Platform specific
@@ -505,10 +490,52 @@ char *get_line(history* hist, TrieNode *completions) {
       continue;
     } else if (c == '\t' || c == 9) {
       // TAB for completion... if not particular, inputs \t
+      if (buffer[pos-1] == ' ' || strlen(buffer) == 0) {
+        // in this case, we don't have anything to put in the
+        // buffer --- we just want to place a tab
+        buffer[pos] = '\t';
+        putchar(c);
+      } else { // want to try to complete the last token now
+        // Get the last token.
+        char *prefix = strrchr(buffer, ' ') + 1;
+        if (!prefix) { // if null, then there are no spaces
+          prefix = buffer;
+        }
+        // Recall that last char = ' ' is already covered
+        // so prefix is now as desired.
+        int len = strlen(prefix);
+
+        // Finds the completion of
+        char *finish = completionOf(completions, prefix);
+        pos += strlen(finish);
+        if (pos >= bufsize) {
+          bufsize += RL_BFS;
+          buffer = realloc(buffer, bufsize);
+          if (!buffer) {
+            fprintf(stderr, "{wsh @ get_line} -- could not resize buffer\n");
+            exit(EXIT_FAILURE);
+          }
+        }
+        if (!strcmp(finish, prefix)) {
+          break;
+        }
+
+        // Reset stdout
+        clear_line_buffer(sizeof(buffer), pos);
+        printf("%s", buffer);
+      }
       continue;
     } else if (c == 127 && pos > 0) {
       // Backspace character
       
+      // Easiest to clear
+      clear_line_buffer(strlen(buffer), pos);
+      // Remove the last character
+      pos--;
+      buffer[pos] = '\0';
+      // Reset stdout
+      printf("%s", buffer);
+
       continue;
     } else {
       buffer[pos] = c;
@@ -560,14 +587,15 @@ int wsh_main(int argc, char **argv) {
   // set up completions tree
 
   TrieNode *completions = tn_getNode();
+  
   tn_insert(completions, "cd");
   tn_insert(completions, "ln");
   tn_insert(completions, "bg");
   tn_insert(completions, "rm");
   tn_insert(completions, "jobs");
   tn_insert(completions, "fg");
-  tn_insert(completions, "testforcompletions");
-  tn_insert(completions, "foobazbarbar");
+
+  struct dirent **fileListt;
 
   // Init the history data structures
   
@@ -600,12 +628,9 @@ int wsh_main(int argc, char **argv) {
 
   // Start in user's home directory
   
-
-  // TODO -- chdir
   if (chdir(home) < 0) {
     perror("{wsh @ init chdir}");
   }
- 
 
   // REPL begins below
 
@@ -625,8 +650,6 @@ int wsh_main(int argc, char **argv) {
 
     char *buffer = get_line(h, completions);
 
-    printf("\n%s\n", buffer);
-    continue;
     // tokenize 
     char **tokens = wsh_tokenize(buffer);
     char **argv = prep(tokens);
@@ -646,13 +669,8 @@ int wsh_main(int argc, char **argv) {
     int tokct = ppstrlen(tokens);
     int argc = ppstrlen(argv);
 
-    if (tokct == 0) {
-      // might as well not continue with this iteration.
-      continue;
-    }
-
     // TODO -- builtin hashtable
-    if (tokens[0] != NULL) {
+    if (tokct > 0) {
       if (strcmp(tokens[0], "exit") == 0) {
         int ec = 0;
         if (tokct == 2){
