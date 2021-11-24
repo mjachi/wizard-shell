@@ -399,16 +399,15 @@ char *get_line(history* hist, TrieNode *completions) {
     exit(EXIT_FAILURE);
   }
 
-  int keystr = 0;
-
   for (;;) {
     c = getch();
-    keystr++;
+
+    // This would be better handled with a switch statement...
+    // but if-else-if-else works fine.
+    // TODO -- switch statement instead
+
     if (c == EOF || c == '\n') { // when user hits enter
       buffer[pos] = '\0';
-
-      printf("\n\n pos is %d", pos);
-      printf("\n keystr is %d", keystr);
 
       if (strlen(buffer) > 0) {
         /**
@@ -501,6 +500,9 @@ char *get_line(history* hist, TrieNode *completions) {
       if (buffer[pos-1] == ' ' || strlen(buffer) == 0 || buffer[pos-1] == '\t') {
         // in this case, we don't have anything to put in the
         // buffer --- we just want to place 4 spaces
+        //
+        // n.b. using the escaped tab character can cause issues
+        // and spaces > tabs regardless.
         for (int i = 0; i < 4; i++) {
             buffer[pos++] = ' ';
             putchar(' ');
@@ -540,24 +542,28 @@ char *get_line(history* hist, TrieNode *completions) {
         printf("%s", buffer);
       }
       continue;
-    } else if (c == 127 && pos > 0) {
+    } else if (c == 127) {
       // Backspace character
-      
-      // Easiest to clear
-      clear_line_buffer(strlen(buffer), pos);
-      // Remove the last character
-      pos--;
-      buffer[pos] = '\0';
-      // Reset stdout
-      printf("%s", buffer);
-
-      continue;
+      //
+      // Nested cond since we only want to do this
+      // if pos > 0; if not, then ignore the backspace
+      // and take in the next character
+      if (pos > 0) {
+          // Easiest to clear
+          clear_line_buffer(strlen(buffer), pos);
+          // Remove the last character
+          pos--;
+          buffer[pos] = '\0';
+          // Reset stdout
+          printf("%s", buffer);
+          continue;
+      }
     } else {
-      buffer[pos] = c;
+      buffer[pos++] = c;
       putchar(c);
     }
 
-    pos++;
+
     if (fflush(stdout) < 0) {
       fprintf(stderr, "{wsh @ get_line} -- could not flush stdout");
       exit(EXIT_FAILURE);
@@ -707,6 +713,10 @@ int wsh_main(int argc, char **argv) {
     char *buffer = get_line(h, completions);
     
     printf("\n\n buffer = %s", buffer);
+    printf("\n of length %lu", strlen(buffer));
+    if (strlen(buffer) == 1) {
+        printf("\n first char is %d", buffer[0]);
+    }
 
     // tokenize 
     char **tokens = wsh_tokenize(buffer);
