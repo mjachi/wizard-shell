@@ -16,4 +16,11 @@ int ppstrlen(char *alos[]);
 // returns the final string in a string array
 char *ppstr_final(char *alos[]);
 
+// returns whether or not a string contains any non
+// alphabetical characters
+int notalpha(char *str);
+
+// tolower for an entire string
+int str_tolower(char *str);
+
 #endif

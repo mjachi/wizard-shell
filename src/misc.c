@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <pwd.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include "misc.h"
 
@@ -51,6 +52,30 @@ char *ppstr_final(char *alos[]) {
     return NULL;
 }
 
+
+// notalpha. 1 on has a nonalphabetical 
+// char, 0 otherwise
+int notalpha(char *str) {
+  int i;
+  for (i = 0; i < strlen(str); i++) {
+    if (!isalpha(str[i])) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+// str_tolower -- tolower but for 
+// strings instead of chars alone
+int str_tolower(char *str) {
+  int len = strlen(str);
+  int i;
+  for (i = 0; i < strlen(str); i++) {
+    str[i] = tolower(str[i]);
+  }
+  return 1;
+}
+
 /** matheval suite (the matheval#'s) -- TODO
  *
  * This is the in-line evaluation mentioned above... a few different functions are 
@@ -62,7 +87,6 @@ char *ppstr_final(char *alos[]) {
  * -- l --> return long
  */ 
 
-int temp_for_compiler = 0;
 
 
 /** Long term: algeval suite (the algeval#'s)

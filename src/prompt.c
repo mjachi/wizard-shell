@@ -587,7 +587,8 @@ int wsh_main(int argc, char **argv) {
   // set up completions tree
 
   TrieNode *completions = tn_getNode();
-  
+
+  // add builtins
   tn_insert(completions, "cd");
   tn_insert(completions, "ln");
   tn_insert(completions, "bg");
@@ -595,7 +596,47 @@ int wsh_main(int argc, char **argv) {
   tn_insert(completions, "jobs");
   tn_insert(completions, "fg");
 
-  struct dirent **fileListt;
+  // Grab $PATH from env
+  char *pathvar = getenv("PATH");
+
+  if (pathvar) {
+    char *path;
+    int i;
+
+    // tokenize on colon to get paths
+    // then use that immediately to 
+    // scandir, and add everything in 
+    // there to the completions system
+    path = strtok(pathvar, ":");
+    while (path) {
+      // Scan directory
+      struct dirent **fListTemp;
+      int num_files = scandir(path, &fListTemp, NULL, alphasort);
+      // For the number of files in there,
+      // want to add only if curr is entirely
+      // made of letters (e.g. g++ and some of the
+      // NVIDIA/ CUDA things will break this, among
+      // others with e.g. dashes and so on)
+      for (i = 0; i < num_files; i++) {
+        char *curr = fListTemp[i]->d_name;
+        if (strcmp(curr, ".")==0 || strcmp(curr, "..")==0){
+          continue;
+        } else if (notalpha(curr)) {
+          continue;
+        } else {
+          str_tolower(curr);
+          tn_insert(completions, curr);
+        }
+      }
+      for (i = 0; i < num_files; i++) {
+        free(fListTemp[i]);
+      }
+      free (fListTemp);
+      path = strtok(NULL, ":");
+    }
+  } else {
+    fprintf(stderr, "{wsh @ init} -- $PATH variable could not be found?");
+  }
 
   // Init the history data structures
   
