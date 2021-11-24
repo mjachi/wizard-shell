@@ -509,17 +509,19 @@ char *get_line(history* hist, TrieNode *completions) {
         }
       } else { // want to try to complete the last token now
         // Get the last token.
-        char *prefix = strrchr(buffer, ' ') + 1;
-        if (!(prefix - 1)) { // if null, then there are no spaces
-          prefix = buffer;
+        char *f_tok = strrchr(buffer, ' ') + 1;
+        if (!(f_tok - 1)) { // if null, then there are no spaces
+          f_tok = buffer;
         }
+
+        char prefix[strlen(f_tok)];
+        strcpy(prefix, f_tok);
 
         printf("\nfpxi as a # is %d", prefix);
         printf("\nfpxi as a str is %s", prefix);
         break;
         // Recall that last char = ' ' is already covered
         // so prefix is now as desired.
-        int len = strlen(prefix);
 
         break;
         // Finds the completion of
