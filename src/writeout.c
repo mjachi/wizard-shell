@@ -25,6 +25,7 @@ void clear_line_buffer(int len, int p) {
   back_up_buffer(len);
 }
 
+// Same behavior but without ncurses, etc
 int getch(void){
     int ch;
     struct termios oldt;

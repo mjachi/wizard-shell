@@ -11,11 +11,10 @@ CPPFLAGS := -Iinclude -MMD -MP
 CFLAGS   := -g3 -g
 CFLAGS   += -Winline -Wfloat-equal -Wnested-externs
 CFLAGS   += -std=gnu11
-LDFLAGS  := -Llib
-LDLIBS   := -lm -lncurses -ltinfo
+#LDFLAGS  := -Llib
+#LDLIBS   := -lm 
 
 EXE := $(BIN_DIR)/wsh
-DBG := $(BIN_DIR)/wshd
 SRC := $(wildcard $(SRC_DIR)/*.c)
 OBJ := $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 OBJD := $(SRC:$(SRC_DIR)/%.c=$(OBJD_DIR)/%.o)
@@ -24,21 +23,16 @@ OBJD := $(SRC:$(SRC_DIR)/%.c=$(OBJD_DIR)/%.o)
 
 # Recipes
 
-all: $(EXE) $(DBG)
+all: $(EXE)
 
 $(EXE): $(OBJ) | $(BIN_DIR)
-	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	#$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	$(CC) $(LDFLAGS) $^ -o $@
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DPROMPT -c $< -o $@
 
-$(DBG): $(OBJD) | $(BIN_DIR)
-	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
-
-$(OBJD_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJD_DIR)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DDBG -DPROMPT -c $< -o $@
-
-$(OBJ_DIR) $(OBJD_DIR) $(BIN_DIR):
+$(OBJ_DIR) $(BIN_DIR):
 	mkdir -p $@
 
 clean:

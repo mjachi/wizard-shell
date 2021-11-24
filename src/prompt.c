@@ -303,6 +303,8 @@ void execute(char **tokens, char **argv,
         
         execvp(first_nonredirect(tokens, "\0"), argv);
 
+        printf("\nhere\n");
+
         perror("\n\texecv");
         exit(1);
     }
@@ -397,10 +399,16 @@ char *get_line(history* hist, TrieNode *completions) {
     exit(EXIT_FAILURE);
   }
 
+  int keystr = 0;
+
   for (;;) {
     c = getch();
+    keystr++;
     if (c == EOF || c == '\n') { // when user hits enter
       buffer[pos] = '\0';
+
+      printf("\n\n pos is %d", pos);
+      printf("\n keystr is %d", keystr);
 
       if (strlen(buffer) > 0) {
         /**
@@ -490,21 +498,28 @@ char *get_line(history* hist, TrieNode *completions) {
       continue;
     } else if (c == '\t' || c == 9) {
       // TAB for completion... if not particular, inputs \t
-      if (buffer[pos-1] == ' ' || strlen(buffer) == 0) {
+      if (buffer[pos-1] == ' ' || strlen(buffer) == 0 || buffer[pos-1] == '\t') {
         // in this case, we don't have anything to put in the
-        // buffer --- we just want to place a tab
-        buffer[pos] = '\t';
-        putchar(c);
+        // buffer --- we just want to place 4 spaces
+        for (int i = 0; i < 4; i++) {
+            buffer[pos++] = ' ';
+            putchar(' ');
+        }
       } else { // want to try to complete the last token now
         // Get the last token.
         char *prefix = strrchr(buffer, ' ') + 1;
-        if (!prefix) { // if null, then there are no spaces
+        if (!(prefix - 1)) { // if null, then there are no spaces
           prefix = buffer;
         }
+
+        printf("\nfpxi as a # is %d", prefix);
+        printf("\nfpxi as a str is %s", prefix);
+        break;
         // Recall that last char = ' ' is already covered
         // so prefix is now as desired.
         int len = strlen(prefix);
 
+        break;
         // Finds the completion of
         char *finish = completionOf(completions, prefix);
         pos += strlen(finish);
@@ -571,7 +586,7 @@ int wsh_main(int argc, char **argv) {
   ssize_t count;
 
   // splash screen
-  splash(); 
+  //splash(); 
   
   // jobs init
 
@@ -690,6 +705,8 @@ int wsh_main(int argc, char **argv) {
     h->curr = h->first;
 
     char *buffer = get_line(h, completions);
+    
+    printf("\n\n buffer = %s", buffer);
 
     // tokenize 
     char **tokens = wsh_tokenize(buffer);
