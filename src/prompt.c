@@ -303,9 +303,7 @@ void execute(char **tokens, char **argv,
         
         execvp(first_nonredirect(tokens, "\0"), argv);
 
-        printf("\nhere\n");
-
-        perror("\n\texecv");
+        perror("\n\n\t{wsh @ execvp}");
         exit(1);
     }
 
@@ -509,24 +507,35 @@ char *get_line(history* hist, TrieNode *completions) {
         }
       } else { // want to try to complete the last token now
         // Get the last token.
-        char *f_tok = strrchr(buffer, ' ') + 1;
-        if (!(f_tok - 1)) { // if null, then there are no spaces
+        char *f_tok = strrchr(buffer, ' ');
+        if (!(f_tok)) { 
+          // if null, then there are no spaces
           f_tok = buffer;
+        } else {
+          // if we reach this case, then we simply need to
+          // increment the pointer by one to capture the last 
+          // word.
+          f_tok = f_tok + 1;
         }
 
         char prefix[strlen(f_tok)];
         strcpy(prefix, f_tok);
+        // to ensure that we don't run into pointer errors 
+        // with this.
 
-        printf("\nfpxi as a # is %d", prefix);
-        printf("\nfpxi as a str is %s", prefix);
-        break;
-        // Recall that last char = ' ' is already covered
-        // so prefix is now as desired.
-
-        break;
         // Finds the completion of
         char *finish = completionOf(completions, prefix);
-        pos += strlen(finish);
+        //clear_line_buffer(sizeof(buffer), pos);
+        int b_len = strlen(f_tok);
+        int final_char = strlen(buffer) - 1;
+        for (int i = 0; i < b_len; i++) {
+            buffer[final_char-i] = '\0';
+        }
+        clear_line_buffer(sizeof(buffer), pos);
+        strcat(buffer, finish);
+        pos = strlen(buffer);
+        printf("%s", buffer);
+
         if (pos >= bufsize) {
           bufsize += RL_BFS;
           buffer = realloc(buffer, bufsize);
@@ -535,13 +544,7 @@ char *get_line(history* hist, TrieNode *completions) {
             exit(EXIT_FAILURE);
           }
         }
-        if (!strcmp(finish, prefix)) {
-          break;
-        }
 
-        // Reset stdout
-        clear_line_buffer(sizeof(buffer), pos);
-        printf("%s", buffer);
       }
       continue;
     } else if (c == 127) {
@@ -713,12 +716,6 @@ int wsh_main(int argc, char **argv) {
     h->curr = h->first;
 
     char *buffer = get_line(h, completions);
-    
-    printf("\n\n buffer = %s", buffer);
-    printf("\n of length %lu", strlen(buffer));
-    if (strlen(buffer) == 1) {
-        printf("\n first char is %d", buffer[0]);
-    }
 
     // tokenize 
     char **tokens = wsh_tokenize(buffer);
@@ -755,7 +752,9 @@ int wsh_main(int argc, char **argv) {
         if (tokct > 1) {
           printf("\n\tclear: syntax error -- doesn't take any arguments");
         }
-        // TODO -- clear
+        if (printf("\e[1;1H\e[2J")) {
+          fprintf(stderr, "{wsh @ clear} -- ANSI clear string failed to print");
+        }
       } else if (strcmp(tokens[0], "cd") == 0) {
         bin_cd(tokct, tokens);   // CD
       } else if (strcmp(tokens[0], "ln") == 0) {

@@ -17,6 +17,7 @@ typedef struct TrieNode TrieNode;
 struct TrieNode {
   TrieNode *children[ALPHABET_S];
   int isLeaf; // 0 is has children, 1 if leaf
+  int count;
 };
 
 // getNode

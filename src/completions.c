@@ -31,6 +31,7 @@ TrieNode *tn_getNode(void) {
         for (i = 0; i < ALPHABET_S; i++)
             pNode->children[i] = NULL;
     }
+    pNode->count = 0;
  
     return pNode;
 }
@@ -44,9 +45,10 @@ void tn_insert(TrieNode *root, const char *key){
  
     for (level = 0; level < length; level++) {
         index = CHAR_TO_INDEX(key[level]);
-        if (!pCrawl->children[index])
+        if (!pCrawl->children[index]){
             pCrawl->children[index] = tn_getNode();
- 
+            pCrawl->count++;
+        }
         pCrawl = pCrawl->children[index];
     }
  
