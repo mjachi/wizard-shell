@@ -2,10 +2,9 @@
 #define WIZARD_SHELL_COMPLETIONS_H
 
 #include <stdlib.h>
-#include <ncurses.h>
 #include <string.h>
 
-#define ALPHABET_S 26 // size of alphabet
+#define ALPHABET_S 32 // size of alphabet
 #define ARR_SIZ(a) sizeof(a)/sizeof(a[0]) // QoL macro def's
 #define CHAR_TO_INDEX(c) ((int)c - (int)'a') 
 
@@ -13,15 +12,18 @@
  * Implementation of the Trie DS/ algorithms for the <Tab> completion system.
  */
 
-typedef struct TrieNode {
-  struct TrieNode *children[ALPHABET_S];
+typedef struct TrieNode TrieNode;
+
+struct TrieNode {
+  TrieNode *children[ALPHABET_S];
   int isLeaf; // 0 is has children, 1 if leaf
-} TrieNode;
+  int count;
+};
 
 // getNode
 //
 // produces newnodes to be added. 
-TrieNode *tn_newNode(void);
+TrieNode *tn_getNode(void);
 
 // inserts nodes into tree as appropriate
 void tn_insert (TrieNode *root, const char *key);
@@ -32,6 +34,9 @@ void tn_insert (TrieNode *root, const char *key);
 // complete with, etc.
 // in the usual sense, 0 if not there, 1 if there
 int tn_search (TrieNode *root, const char *key);
+
+// to remove
+TrieNode* tn_remove(TrieNode *root, char *key, int depth);
 
 /**
  * Other functions that should be globally accessible for this.
@@ -46,6 +51,6 @@ int tn_search (TrieNode *root, const char *key);
 // inplace is set to the completion based as the user tabs
 // through options or the only option is there is just one
 // for the rest of one branch based on token.
-void completion(TrieNode *root, char *token, WINDOW* w);
+char *completionOf(TrieNode *root, char *prefix);
 
 #endif

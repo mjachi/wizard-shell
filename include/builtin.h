@@ -12,6 +12,7 @@ int bin_jobs(int argc, char **argv);
 int bin_fg(int argc, char **argv);
 int bin_bg(int argc, char **argv);
 int bin_cd(int argc, char **argv);
+int bin_clear(int argc, char **argv);
 
 
 #endif

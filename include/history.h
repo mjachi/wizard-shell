@@ -21,7 +21,6 @@ typedef struct hist_node {
 } hist_node;
 
 
-// what will be accessed outside
 typedef struct history {
   hist_node* first; // the most recent command
   hist_node* curr; // keep track of when to move up, down
