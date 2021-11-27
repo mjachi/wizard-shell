@@ -629,11 +629,13 @@ int wsh_main(int argc, char **argv) {
   tn_insert(completions, "rm");
   tn_insert(completions, "jobs");
   tn_insert(completions, "fg");
+  tn_insert(completions, "clear");
 
   // Grab $PATH from env
   char *pathvar = getenv("PATH");
+  char *pathvar_cpy = strcpy(pathvar_cpy, pathvar);
 
-  if (pathvar) {
+  if (pathvar_cpy) {
     char *path;
     int i;
 
@@ -641,7 +643,7 @@ int wsh_main(int argc, char **argv) {
     // then use that immediately to 
     // scandir, and add everything in 
     // there to the completions system
-    path = strtok(pathvar, ":");
+    path = strtok(pathvar_cpy, ":");
     while (path) {
       // Scan directory
       struct dirent **fListTemp;
@@ -747,7 +749,10 @@ int wsh_main(int argc, char **argv) {
     // TODO -- builtin hashtable
     if (tokct > 0) {
       if (strcmp(tokens[0], "exit") == 0) {
+        exit(0);
         int ec = 0;
+        free(h);
+        deleteHashTable(aliass);
         if (tokct == 2){
           ec = atoi(tokens[1]);
         } else if (tokct > 2) {
