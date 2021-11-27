@@ -10,10 +10,6 @@ others (whose implementations I would also describe as naive).
 
 TODO
 
-- Completions: the tree is populated successfully, but pressing TAB to retrieve the appropriate
-    completion leads to a seg-fault immediately. Issue of scale? Path list of executables is
-    significantly larger on both laptop and Gentoo machine, despite being relatively minimal
-    installs.
 - Aliasing: The HT structure seems sound. This feature just needs to be implemented in whole.
     In between retrieving the buffer line and tokenizing, there will be a
     "resolve_alias_and_shortcuts" to, well, resolve the aliases and shortcuts. For now, both
