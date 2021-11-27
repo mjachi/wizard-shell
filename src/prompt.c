@@ -301,9 +301,12 @@ void execute(char **tokens, char **argv,
 
         // Executes the command in the child process
         
-        execvp(first_nonredirect(tokens, "\0"), argv);
+        char *fnr = first_nonredirect(tokens, "\0");
 
-        perror("\n\n\t{wsh @ execvp}");
+        execvp(fnr, argv);
+
+        perror("\n\t{wsh @ execvp} ");
+        printf("\ncommand: \"%s\" of length %d", fnr, strlen(fnr));
         exit(1);
     }
 
@@ -455,6 +458,10 @@ char *get_line(history* hist, TrieNode *completions) {
             // Increment
             hist->curr = hist->curr->next;
           }
+
+          // Going up --> back to clear --> up 
+          // fails...
+          // TODO -- fix that
           // Any other cases should be left as is.
           break;
         case 66: // Down
@@ -477,6 +484,7 @@ char *get_line(history* hist, TrieNode *completions) {
             clear_line_buffer(strlen(buffer), pos);
             memset(buffer, 0, sizeof(buffer));
             pos = 0;
+            hist_iter = 0;
           }
           // Any other cases should be left as is.
           break;
@@ -675,6 +683,8 @@ int wsh_main(int argc, char **argv) {
 
   HashTable *aliass = newHashTable(50);
 
+  // TODO -- Init builtins HT
+
   // environment init
   char *home = getenv("HOME");
   char *uid = getenv("USER");
@@ -720,9 +730,7 @@ int wsh_main(int argc, char **argv) {
     // tokenize 
     char **tokens = wsh_tokenize(buffer);
     char **argv = prep(tokens);
-    
-    //if (tokens[0]) tn_insert(completions, tokens[0]);
-
+    printf("\n");
     if (!tokens){
       // if error while parsing
       fprintf(stderr, "{wsh @ REPL -- parsing} -- ran into generic error parsing\n");
@@ -749,12 +757,7 @@ int wsh_main(int argc, char **argv) {
         cleanup_job_list(jobs_list);
         exit(ec);  // Exit Command
       } else if (strcmp(tokens[0], "clear") == 0) {
-        if (tokct > 1) {
-          printf("\n\tclear: syntax error -- doesn't take any arguments");
-        }
-        if (printf("\e[1;1H\e[2J")) {
-          fprintf(stderr, "{wsh @ clear} -- ANSI clear string failed to print");
-        }
+        bin_clear(tokct, tokens);
       } else if (strcmp(tokens[0], "cd") == 0) {
         bin_cd(tokct, tokens);   // CD
       } else if (strcmp(tokens[0], "ln") == 0) {
@@ -776,7 +779,7 @@ int wsh_main(int argc, char **argv) {
       }
     }
 
-    // Waiting for all Background Processes here:
+    // Waiting for all background processes here:
     int wret, wstatus;
     while ((wret = waitpid(-1, &wstatus,
                          WNOHANG | WUNTRACED | WCONTINUED)) > 0) {

@@ -92,5 +92,26 @@ int bin_rm(int argc, char **argv) {
     return 0;
 }
 
-
+/**
+ *
+ * Executes the clear command on the given tokesn
+ * 
+ * Parameters:
+ * - tokens: the tokenized inputs to the command line
+ *
+ * Returns an int based on the success/ failure of printing
+ * the ANSI clear string provided.
+ *
+ */
+int bin_clear(int argc, char **argv) {
+  if (argc > 1) {
+    printf("\n\tclear: syntax error -- too many arguments... takes none");
+    return -1;
+  }
+  if (printf("\e[1;1H\e[2J")) {
+    fprintf(stderr, "{wsh @ clear} -- ANSI clear string failed to print");
+    return -1;
+  }
+  return 0;
+}
 

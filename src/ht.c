@@ -197,6 +197,9 @@ void* ht_get(HashTable* ht, const char *key){
   return NULL;
 }
 
+
+
+
 // may omit erase.........
 // haven't worked out sizing back down.
 
