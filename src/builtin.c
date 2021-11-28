@@ -66,7 +66,6 @@ int bin_fg(int argc, char **argv) {
     return 0;
 }
 
-
 /**
  * Executes the bg command on the given tokens
  *
@@ -77,7 +76,6 @@ int bin_fg(int argc, char **argv) {
  * Returns int based on execution success or failure
  *
  */
-
 
 int bin_bg(int argc, char **argv) {
     // Checks that there's at least 1 arguments after the ln string
@@ -134,7 +132,7 @@ int bin_jobs(int argc, char **argv) {
 
 
 /*
- * Executes the cd Command on the given tokens
+ * Executes the cd command on the given tokens
  *
  * Parameters:
  *  - argc: the count of the tokens in argv
@@ -174,7 +172,7 @@ int bin_cd(int argc, char **argv){
 }
 
 /*
- * Executes the ln Command on the given tokens
+ * Executes the ln command on the given tokens
  *
  * Parameters:
  *  - tokens: the tokenized inputs to the command line
@@ -199,12 +197,13 @@ int bin_ln(int argc, char **argv) {
 }
 
 /*
- * Executes the rm Command on the given tokens
+ * Executes the rm command on the given tokens
  *
  * Parameters:
- *  - tokens: the tokenized inputs to the command line
+ *  - argc: token count in argv
+ *  - argv: tokenized input
  *
- * Returns: Nothing
+ * Returns: int based on execution success or failure
  */
 
 int bin_rm(int argc, char **argv) {
@@ -214,11 +213,13 @@ int bin_rm(int argc, char **argv) {
         return -1;
     }
 
+
+
     for (int i = 1; i < argc; i++) {
       if (unlink(argv[1]) < 0) {
         char *error = strerror(errno);
         printf("\n\t rm: %s", error);
-        if (argc == 1) {
+        if (i == 1 && errno != 0) {
           return -1;
         }
       }
@@ -231,7 +232,8 @@ int bin_rm(int argc, char **argv) {
  * Executes the clear command on the given tokesn
  * 
  * Parameters:
- * - tokens: the tokenized inputs to the command line
+ * - argc: token count in argv
+ * - argv: the tokenized input
  *
  * Returns an int based on the success/ failure of printing
  * the ANSI clear string provided.

@@ -123,7 +123,7 @@ char **prep (char **tokens) {
  *
  * Parameters:
  * - tokens the raw input tokens.
- * - aliass: pointer to the HashTable that contains all the 
+ * - aliass: pointer to the hash_table that contains all the 
  *   aliass for a run time.
  *
  * Returns: an array of strings where each token is replaced
@@ -132,13 +132,12 @@ char **prep (char **tokens) {
  * match in HT for "l" --> "ls -la", as is typical.
  */
 
-char **resolve_aliass(char **tokens, HashTable *aliass) {
+char **resolve_aliass(char **tokens, hash_table *aliass) {
   return NULL;
 }
 
-// Retu
 /**
- * Returns a new 
+ * Returns a new set of tokens with shortcuts filled in.
  *
  */
 
@@ -638,7 +637,7 @@ int wsh_main(int argc, char **argv) {
 
   // init alias HT
 
-  HashTable *aliass = newHashTable(50);
+  hash_table *aliass = ht_new_ht(50);
 
   // TODO -- Init builtins HT
 
