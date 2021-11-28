@@ -16,6 +16,10 @@ extern int errno;
 int jcount = 0;
 job_list_t *jobs_list = NULL;
 
+builtins_table *BI_TABLE = NULL;
+alias_table *AL_TABLE = NULL;
+
+
 /**
  * prompt.c 
  *
@@ -118,11 +122,76 @@ char **prep (char **tokens) {
 }
 
 
+/** 
+ * Processes an input alias definition
+ *
+ * MUST be of the form 
+ *
+ * > alias name="here is the definition"
+ *
+ * errs otherwise. No space allowed in 
+ * between the equal sign as with zsh
+ *
+ * Parameters:
+ * - argc: the count of argv
+ * - argv: raw input tokens
+ */
+
+int process_alias(int argc, char **argv) {
+  if (argc < 2) {
+    fprintf(stderr, "\n\t{wsh @ process_alias} -- needs a definition");
+    return -1;
+  }
+  
+  if (AL_TABLE == NULL) {
+    fprintf(stderr, "\n\t{wsh @ process_alias} -- alias table is not defined; \
+      this may be indicative of an allocation error. Exiting");
+  }
+
+  // TODO -- 
+  //  1 - Loop through argv[1] since it exists.
+  //   In particular, either it's the only token based
+  //   on ' ' or there are several others --> check for "
+  //   at the end and err as necessary
+  //
+  //   Until = and " are found directly next to each other
+  
+  int i;
+
+
+  if (argc == 2) { // ex. name="definition"
+    int len = strlen(argv[1]);
+    if (len == 0) { // could happen?
+      fprintf(stderr, "{wsh @ process_alias} -- needs a definition");
+      return -1;
+    }
+    
+    // The next bit is akin to how the 
+    // input buffer is defined in get_line()
+    // We can realloc as is needed throughout,
+    // though 1024 is already quite large
+  
+    for (i = 0; i < len; i++) {
+
+    }
+
+  } else { // recall < 2 case already checked
+           // hence ex. name="this defines me"
+
+
+  }
+
+  fprintf(stderr, "{wsh @ process_alias} -- bad definition formatting; ex. \
+    alias name=\"here is the definition\"");
+  return 0;
+}
+
+
 /**
  * Returns a new set of tokens with aliases filled in.
  *
  * Parameters:
- * - tokens the raw input tokens.
+ * - tokens: the raw input tokens.
  * - aliass: pointer to the hash_table that contains all the 
  *   aliass for a run time.
  *
@@ -132,12 +201,23 @@ char **prep (char **tokens) {
  * match in HT for "l" --> "ls -la", as is typical.
  */
 
-char **resolve_aliass(char **tokens, hash_table *aliass) {
+char **resolve_aliass(char **tokens, alias_table *aliass) {
   return NULL;
 }
 
 /**
  * Returns a new set of tokens with shortcuts filled in.
+ * Currently supports only two:
+ *
+ * "*" -- when a standalone token, extends into all files
+ * and folders excluding the links to cwd and pwd.
+ *
+ * Currently, won't play nicely with e.g. "*.c", which 
+ * the user likely intended to fill out with everything 
+ * in cwd that had the extension for a C source file
+ *
+ * "~" -- as usual, routes to the current user's home directory 
+ * if it can be found, otherwise errs and re-enters the REPL.
  *
  */
 
@@ -394,7 +474,7 @@ char *get_line(history* hist, TrieNode *completions) {
           } else if (hist_iter == 0 && hist->first) {
             // Clear buffer && line
             clear_line_buffer(strlen(buffer),pos);
-            memset(buffer, '\0', sizeof(buffer) * sizeof(char*));
+            memset(buffer, '\0', bufsize * sizeof(char));
             // Copy command into buffer
             char *hcm = hist->first->command;
             strcpy(buffer, hcm);
@@ -407,7 +487,7 @@ char *get_line(history* hist, TrieNode *completions) {
           } else if (hist->curr->next) {
             // Clear buffer && line
             clear_line_buffer(strlen(buffer), pos);
-            memset(buffer, '\0', sizeof(buffer) * sizeof(char*));
+            memset(buffer, '\0', bufsize * sizeof(char));
             // Copy command into buffer
             char *hcm = hist->curr->next->command;
             strcpy(buffer, hcm);
@@ -424,7 +504,7 @@ char *get_line(history* hist, TrieNode *completions) {
           } else if (hist->curr->prev) {
             // Clear buffer && line
             clear_line_buffer(strlen(buffer), pos);
-            memset(buffer, '\0', sizeof(buffer) * sizeof(char*));
+            memset(buffer, '\0', bufsize * sizeof(char));
             // Copy command into buffer
             char *hcm = hist->curr->prev->command;
             strcpy(buffer, hcm);
@@ -436,7 +516,7 @@ char *get_line(history* hist, TrieNode *completions) {
           } else if (!hist->curr->prev && strlen(buffer) > 0) {
             // Clear buffer && line
             clear_line_buffer(strlen(buffer), pos);
-            memset(buffer, '\0', sizeof(buffer) * sizeof(char*));
+            memset(buffer, '\0', bufsize * (sizeof(char*)));
             pos = 0;
             hist_iter = 0;
           }
@@ -637,7 +717,10 @@ int wsh_main(int argc, char **argv) {
 
   // init alias HT
 
-  hash_table *aliass = ht_new_ht(50);
+  AL_TABLE = at_new_at(50);
+  if (AL_TABLE == NULL) {
+    fprintf(stderr, "{wsh @ init} -- ");
+  }
 
   // TODO -- Init builtins HT
 
