@@ -10,10 +10,11 @@ others (whose implementations I would also describe as naive).
 
 TODO
 
-- Completions: the tree is populated successfully, but pressing TAB to retrieve the appropriate
-    completion leads to a seg-fault immediately. Issue of scale? Path list of executables is
-    significantly larger on both laptop and Gentoo machine, despite being relatively minimal
-    installs.
+- HashTable: Need to redo this structure to be specific to my use case, since it currently works
+    best with basic data types, but I intended to use them with function pointers. This logic is 
+    going to be separated into aliasing and builtins, since the uses are different. The generic 
+    things will remain the same, but e.g. I don't want the `get` function to return void ptrs, since
+    the casting is obviously problematic.
 - Aliasing: The HT structure seems sound. This feature just needs to be implemented in whole.
     In between retrieving the buffer line and tokenizing, there will be a
     "resolve_alias_and_shortcuts" to, well, resolve the aliases and shortcuts. For now, both

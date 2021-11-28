@@ -1,13 +1,8 @@
 #include "prompt.h"
+#include "global.h"
 #include "misc.h"
 #include "writeout.h"
-#include <dirent.h>
-#include <limits.h>
-#include <sys/utsname.h>
 
-#define _BSD_SOURCE
-#define _XOPEN_SORUCE 700
-#define UNUSED(x) (void)(x)
 #define MAX_HOST 253
 #define MAX_PATH 4096
 #define BANG_MAX 64
@@ -18,8 +13,8 @@
 
 
 extern int errno;
-job_list_t *jobs_list;
-int jcount;
+int jcount = 0;
+job_list_t *jobs_list = NULL;
 
 /**
  * prompt.c 
@@ -27,95 +22,19 @@ int jcount;
  * Contains I/O and REPL implementations.
  */
 
-int bin_fg(int argc, char **argv) {
-    if (argc != 2) {
-        printf("\n\tfg: syntax error -- requires exactly one argument");
-        return -1;
-    }
 
-    if (argv[1][0] != '%') {
-        printf("\n\tfg: job input does not begin with %%\n");
-        return -1;
-    }
+/**
+ * Tokenizes the line as desired.
+ *
+ * Parameters:
+ * - line: just the raw input line (after resolving aliases
+ *   and shortcuts)
+ *
+ * Returns char**, an array with the tokens on ' '
+ *
+ *
+ */
 
-    int jid = atoi(argv[1] + 1);
-    pid_t pid = get_job_pid(jobs_list, jid);
-    if (pid < 0) {
-        printf("\n\tjob not found\n");
-        return -1;
-    }
-
-    tcsetpgrp(STDIN_FILENO, pid);
-    if (kill(-1 * pid, SIGCONT) < 0) {
-        printf("\n\t{wsh @ bin_fg} -- error in continuing the job");
-        return -1;
-    }
-
-    int wret, wstatus;
-    if ((wret = waitpid(pid, &wstatus, WUNTRACED)) > 0) {
-        if (WIFEXITED(wstatus)) {
-            remove_job_jid(jobs_list, jid);
-        }
-        if (WIFSIGNALED(wstatus)) {
-            remove_job_jid(jobs_list, jid);
-            if (!printf("\n[%d] (%d) terminated by signal %d\n", jcount,
-                        wret, WTERMSIG(wstatus))) {
-                fprintf(stderr,"\n\t{wsh @ bin_fg} -- error writing to output\n");
-            }
-        }
-        if (WIFSTOPPED(wstatus)) {
-            update_job_jid(jobs_list, jid, STOPPED);
-            if (!printf("\n\t[%d] (%d) suspended by signal %d\n", jcount,
-                        wret, WSTOPSIG(wstatus))) {
-                fprintf(stderr,"\n\t{wsh @ bin_fg} -- error writing to output\n");
-            }
-        }
-    }
-
-    tcsetpgrp(STDIN_FILENO, getpgrp());
-    return 0;
-}
-
-int bin_bg(int argc, char **argv) {
-    // Checks that there's at least 1 arguments after the ln string
-    if (argc != 2) {
-        printf("\n\tbg: syntax error -- requires exactly one argument\n");
-        return -1;
-    }
-
-    if (argv[1][0] != '%') {
-        printf("\n\tbg: job input does not begin with %%\n");
-        return -1;
-    }
-
-    int jid = atoi(argv[1] + 1);
-    pid_t pid = get_job_pid(jobs_list, jid);
-    if (pid < 0) {
-        printf("\n\t{wsh @ bg} -- job not found with code %d\n", pid);
-        return -1;
-    }
-
-    if (kill(-1 * pid, SIGCONT) < 0) {
-        printf("\n\t{wsh @ bg} -- error in continuing the job");
-        return -1;
-    }
-
-  return 0;
-}
-
-
-int bin_jobs(int argc, char **argv) {
-    if (argc != 1) {
-        printf("\n\tjobs: syntax error -- too many arguments; doesn't take any\n");
-        return -1;
-    }
-
-    jobs(jobs_list);
-    return 0;
-}
-
-
-// Tokenize the buffer as desired.
 char **wsh_tokenize(char *line) {
   int bufsize = PS_BFS; 
   int pos = 0;
@@ -149,7 +68,17 @@ char **wsh_tokenize(char *line) {
   return tokens;
 }
 
-// Take tokens and returns argv
+/**
+ * Processes the tokens as desired.
+ *
+ * Parameters:
+ * - tokens: just the output of wsh_tokenize, in short
+ *
+ * Returns: another char** with a processed set of tokens
+ * e.g. /bin/echo -> echo
+ * and some others
+ *
+ */
 char **prep (char **tokens) {
   int bufsize = PS_BFS;
   int pos = 0;
@@ -186,6 +115,35 @@ char **prep (char **tokens) {
     }
   }
   return argv;
+}
+
+
+/**
+ * Returns a new set of tokens with aliases filled in.
+ *
+ * Parameters:
+ * - tokens the raw input tokens.
+ * - aliass: pointer to the HashTable that contains all the 
+ *   aliass for a run time.
+ *
+ * Returns: an array of strings where each token is replaced
+ * with a value in the alias HT if there is a match.
+ * e.g. "l /etc" --> "ls -la /etc", granted that there is a 
+ * match in HT for "l" --> "ls -la", as is typical.
+ */
+
+char **resolve_aliass(char **tokens, HashTable *aliass) {
+  return NULL;
+}
+
+// Retu
+/**
+ * Returns a new 
+ *
+ */
+
+char **resolve_shortcuts() {
+  return NULL;
 }
 
 
@@ -306,7 +264,7 @@ void execute(char **tokens, char **argv,
         execvp(fnr, argv);
 
         perror("\n\t{wsh @ execvp} ");
-        printf("\ncommand: \"%s\" of length %d", fnr, strlen(fnr));
+        printf("\ncommand: \"%s\" of length %lu", fnr, strlen(fnr));
         exit(1);
     }
 
@@ -369,14 +327,16 @@ int splash() {
   
 
   struct utsname unameData;
-  int ret = uname(&unameData);
+  int ret;
   
-  if (ret) {
+  if ((ret = uname(&unameData))) {
     printf("wsh (:wizard: shell)");
     return ret;
   }
 
-  printf("wsh (:wizard: shell) on %s running %s, \n\n", unameData.nodename, unameData.release);
+  char *node_name = unameData.nodename;
+  char *release = unameData.release;
+  printf("wsh (:wizard: shell) on %s running %s, \n\n", node_name, release);
   
   return 0;
 }
@@ -435,7 +395,7 @@ char *get_line(history* hist, TrieNode *completions) {
           } else if (hist_iter == 0 && hist->first) {
             // Clear buffer && line
             clear_line_buffer(strlen(buffer),pos);
-            memset(buffer, 0, sizeof(buffer));
+            memset(buffer, '\0', sizeof(buffer) * sizeof(char*));
             // Copy command into buffer
             char *hcm = hist->first->command;
             strcpy(buffer, hcm);
@@ -448,7 +408,7 @@ char *get_line(history* hist, TrieNode *completions) {
           } else if (hist->curr->next) {
             // Clear buffer && line
             clear_line_buffer(strlen(buffer), pos);
-            memset(buffer, 0, sizeof(buffer));
+            memset(buffer, '\0', sizeof(buffer) * sizeof(char*));
             // Copy command into buffer
             char *hcm = hist->curr->next->command;
             strcpy(buffer, hcm);
@@ -458,11 +418,6 @@ char *get_line(history* hist, TrieNode *completions) {
             // Increment
             hist->curr = hist->curr->next;
           }
-
-          // Going up --> back to clear --> up 
-          // fails...
-          // TODO -- fix that
-          // Any other cases should be left as is.
           break;
         case 66: // Down
           if (hist_iter == 0 || !hist->first) {
@@ -470,7 +425,7 @@ char *get_line(history* hist, TrieNode *completions) {
           } else if (hist->curr->prev) {
             // Clear buffer && line
             clear_line_buffer(strlen(buffer), pos);
-            memset(buffer, 0, sizeof(buffer));
+            memset(buffer, '\0', sizeof(buffer) * sizeof(char*));
             // Copy command into buffer
             char *hcm = hist->curr->prev->command;
             strcpy(buffer, hcm);
@@ -482,11 +437,10 @@ char *get_line(history* hist, TrieNode *completions) {
           } else if (!hist->curr->prev && strlen(buffer) > 0) {
             // Clear buffer && line
             clear_line_buffer(strlen(buffer), pos);
-            memset(buffer, 0, sizeof(buffer));
+            memset(buffer, '\0', sizeof(buffer) * sizeof(char*));
             pos = 0;
             hist_iter = 0;
           }
-          // Any other cases should be left as is.
           break;
         case 67: // Right
           if (pos < strlen(buffer)) {
@@ -599,26 +553,24 @@ char *get_line(history* hist, TrieNode *completions) {
  * Main REPL driving function.
  */
 int wsh_main(int argc, char **argv) {
-  // Setting up the Initial Variables for the Main Function
-  char *tokens[TOKS];
-  char *execv[TOKS];
+
+  UNUSED(argc);
+  UNUSED(argv);
+
+  char *tokens[512];
+  char *execv[512];
   ssize_t count;
 
   // splash screen
-  //splash(); 
+  int err_splash;
+  if ((err_splash = splash()) != 0){
+    fprintf(stderr, "{wsh @ init} -- failed splash screen");
+  } 
   
-  // jobs init
+  // set up completions tree
+  
 
   jobs_list = init_job_list();
-  jcount = 0;
-
-  // Setting up signal ignores in parent:
-
-  signal(SIGINT, SIG_IGN);
-  signal(SIGTSTP, SIG_IGN);
-  signal(SIGTTOU, SIG_IGN);
-
-  // set up completions tree
 
   TrieNode *completions = tn_getNode();
 
@@ -633,9 +585,12 @@ int wsh_main(int argc, char **argv) {
 
   // Grab $PATH from env
   char *pathvar = getenv("PATH");
-  char *pathvar_cpy = strcpy(pathvar_cpy, pathvar);
+  char pathvar_cpy[strlen(pathvar)];
+  memset(pathvar_cpy, '\0', sizeof(pathvar_cpy));
 
-  if (pathvar_cpy) {
+  strcpy(pathvar_cpy, pathvar);
+
+  if (pathvar) {
     char *path;
     int i;
 
@@ -749,10 +704,7 @@ int wsh_main(int argc, char **argv) {
     // TODO -- builtin hashtable
     if (tokct > 0) {
       if (strcmp(tokens[0], "exit") == 0) {
-        exit(0);
         int ec = 0;
-        free(h);
-        deleteHashTable(aliass);
         if (tokct == 2){
           ec = atoi(tokens[1]);
         } else if (tokct > 2) {
@@ -760,7 +712,7 @@ int wsh_main(int argc, char **argv) {
           continue;
         }
         cleanup_job_list(jobs_list);
-        exit(ec);  // Exit Command
+        return ec;  // Exit Command
       } else if (strcmp(tokens[0], "clear") == 0) {
         bin_clear(tokct, tokens);
       } else if (strcmp(tokens[0], "cd") == 0) {
