@@ -20,7 +20,7 @@ typedef struct b_node {
 
 typedef struct a_node {
   const char *key;
-  char *value;
+  char **value;
 } a_node;
 
 typedef struct hash_table {
@@ -35,6 +35,11 @@ typedef struct builtins_table {
   size_t count;
 } builtins_table;
 
+typedef struct alias_table {
+  a_node* entries;
+  size_t size;
+  size_t count;
+} alias_table;
 
 // I assume that there is some sort of templating feature out there
 // a la C++ that I do not know about in  C99; hence, since I wanted 
@@ -323,6 +328,8 @@ void bt_blowup(builtins_table* bt, double factor){
 	bt->size = new_cap;
 }
 
+// -- Beginning of accessible BT functions
+
 /**
  * Creates a new builtins_table based on the parameter 
  * size. Note that this is automatically realloc'd
@@ -429,9 +436,184 @@ int bt_count(builtins_table* bt) {
   return bt->count;
 }
 
+// End of builtins table implementations
+// Functions for the alias table follow
 
-// Functions for the aliass table follow
+
+/**
+ * Full logic for setting the alias table values; required for both 
+ * the setting logic that is interfaced with elsewhere in addition 
+ * to resizing/ blowup below
+ */
+int at_set_internal(a_node* ans, int capacity, size_t* plength, const char *key, char** val){
+  assert(ans);
+  assert(capacity > 50);
+  assert(key);
+  assert(val);
+
+  uint64_t hash = ht_hash(key);
+  int ind = (int)(hash & (uint64_t)(capacity-1));
+
+  while(ans[ind].key) {
+    if(!strcmp(key, ans[ind].key)){
+      ans[ind].value = val;
+      return 0;
+    }
+    ++ind;
+    ind = ind > capacity - 1 ? 0 : ind;
+  } // finds empty entry and places
+
+  if (plength) { // special case
+    key = strdup(key);
+    if (!key) {
+      return 1;
+    }
+    (*plength)++;
+  }
+  ans[ind].key = key;
+  ans[ind].value = val;
+
+  return 0;
+}
 
 
 
+/**
+ * Resizing logic for the alias_table.
+ */
+void at_blowup(alias_table* at, double factor){
+	assert(at);
+  assert(factor > 1);
+
+  size_t new_cap = (size_t) (factor * at->size);
+	a_node* new_nodes = calloc(new_cap, sizeof(a_node*));
+	if(new_cap < at->size || !new_nodes) {
+		fprintf(stderr, "Overflowed on a hash_table resize...");
+		exit(1);
+	}
+
+	// Now to move everything over
+	for (size_t i = 0; i < at->size; i++) {
+		a_node curr = at->entries[i];
+		if (curr.key != NULL) {
+			at_set_internal(new_nodes, new_cap, 0, curr.key, curr.value);
+		}
+	}
+
+
+	free(at->entries);
+	at->entries = new_nodes;
+	at->size = new_cap;
+
+}
+
+// -- Accessible functions follow
+
+/**
+ * Creates a new alias_table based on the parameter 
+ * size. Note that this is automatically realloc'd
+ * in the case that too many elements are passed.
+ *
+ * Returns a pointer to the AT on success, and 
+ * NULL on fail.
+ */
+alias_table* at_new_at(int size) {
+	assert(size > 0);
+
+	alias_table* at = malloc(sizeof(alias_table));
+	if(!at) { // NULL will be used for error checking.
+		return NULL;
+	}
+	
+	at->size = size;
+	at->entries = calloc(size, sizeof(a_node));
+	if(!at->entries) { // similar. need to free ht though.
+		free(at);
+		return NULL;
+	}
+
+	return at;
+}
+
+/**
+ * Frees the hash_table given to as parameter.
+ *
+ * Returns 1 always; if free fails, the program
+ * will exit already, but this is indicative 
+ * of greater issues at the OS level.
+ *
+ * Assertions are there simply because there 
+ * should be never be an attempt to insert something
+ * that is currently null.
+ *
+ */
+int at_delete_at(alias_table* at){
+	assert(at); 
+
+  // Free mem from each element
+	size_t i;
+	for (i = 0; i < at->size; i++){
+		if(at->entries[i].key){
+			free((void*)at->entries[i].key);
+		}
+	}
+  // Free mem from larger structs
+	free(at->entries);
+	free(at);
+
+  return 1;
+}
+
+/**
+ * Push a new element with the given key/ value
+ * pairs in the provided hash_table
+ *
+ * Returns 0 if it failed to insert and 1 if succeeded
+ */
+int at_set(alias_table* at, char *abbr, char **tok_ext){
+	assert(at);
+	assert(abbr);
+	assert(tok_ext);
+
+	if (at->count >= at->size) {
+		at_blowup(at, 1.5);
+    // adds half of the "current" size... hopefully keeps mem cost down long term
+    // but will require more computation early
+	}
+
+  return at_set_internal(at->entries, at->size, &at->count, abbr, tok_ext);
+}
+
+
+/**
+ * Retrieves a value from the given table
+ * based on provided key string.
+ *
+ * Returns value on success and NULL when not found
+ * or generic failure
+ */
+char** at_get(alias_table* at, const char *abbr){
+  assert(at);
+  assert(abbr);
+
+  size_t i = (size_t) (ht_hash(abbr) & (uint64_t)(at->size-1)); 
+  // idea is to take hash and cast to something we can index with
+  
+  while (at->entries[i].key) {
+    if (strcmp(at->entries[i].key, abbr) == 0) {
+      return at->entries[i].value;
+    }
+    i = (++i > at->size-1) ? 0 : i; // possibility of wrap-around
+  }
+  return NULL;
+}
+
+/**
+ * Returns the current of the given hash_table
+ */
+int at_count(alias_table* at) {
+  return at->count;
+}
+
+// EOF
 
