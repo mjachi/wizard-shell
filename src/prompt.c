@@ -292,7 +292,7 @@ char **resolve_alias_shortcuts(char **tokens, char *home) {
 
       struct dirent **fListTemp;
       int num_files = scandir(cwd_path, &fListTemp, NULL, alphasort);
-      for (j = 0; i < num_files; i++) {
+      for (j = 0; j < num_files; j++) {
         char *curr = fListTemp[j]->d_name;
         int hidden_bool = (strlen(curr) > 0) ? curr[0] == '.' : 1;
         if (strcmp(curr, ".") == 0 || strcmp(curr, "..") == 0) {
@@ -321,19 +321,21 @@ char **resolve_alias_shortcuts(char **tokens, char *home) {
       inc_bool=0;
       
     } else if ((alias_toks = at_get(AL_TABLE, tokens[i])) != NULL) { // alias's
+
       int j;
       int al_len = ppstrlen(alias_toks);
-      for (j = 0; j < al_len; j++) {
-        f_tokens[pos+j] = alias_toks[j];
-        j++;
-      }
-      if (pos+1 >= bufsize) {
+      printf("\nal_len %d", al_len);
+      if (pos+al_len >= bufsize) {
         bufsize += PS_BFS;
         tokens = realloc(tokens, bufsize * sizeof(char*));
         if (!tokens) {
           fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
           exit(EXIT_FAILURE);
         }
+      }
+
+      for (j = 0; j < al_len; j++) {
+        f_tokens[pos+j] = alias_toks[j];
       }
 
       pos += j;
@@ -344,23 +346,20 @@ char **resolve_alias_shortcuts(char **tokens, char *home) {
     }
 
 
-
-    if (pos+1 >= bufsize) {
-      bufsize += PS_BFS;
-      tokens = realloc(tokens, bufsize * sizeof(char*));
-      if (!tokens) {
-        fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
-        exit(EXIT_FAILURE);
-      }
-    }
     i++;
     if (inc_bool) {
+      if (pos+1 >= bufsize) {
+        bufsize += PS_BFS;
+        f_tokens = realloc(f_tokens, bufsize * sizeof(char*));
+        if (!f_tokens) {
+          fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
+          exit(EXIT_FAILURE);
+        }
+      }
       pos++;
     }
   }
-  f_tokens[i] = NULL;
-  printf("\n\n f_tokens: ");
-  print_arr(f_tokens);
+  f_tokens[pos+1] = NULL;
   return f_tokens;
 }
 
@@ -887,6 +886,7 @@ int wsh_main(int argc, char **argv) {
   tn_insert(completions, "jobs");
   tn_insert(completions, "fg");
   tn_insert(completions, "clear");
+  tn_insert(completions, "exit");
 
   // Grab $PATH from env
   char *pathvar = getenv("PATH");
@@ -957,6 +957,8 @@ int wsh_main(int argc, char **argv) {
 
   for (;;) { // beginning of this = new command
     
+    // TODO -- add CWD files to completions
+
     if (printf("%s",bang) < 0) { // scuffed try catch for when we reach the bottom of the screen.
       fprintf(stderr, "\n\t{wsh @ REPL} -- unable to write to screen");
       return -1;
@@ -1014,36 +1016,6 @@ int wsh_main(int argc, char **argv) {
         }
       }
     }
-
-/*
-    if (tokct > 0) {
-      if (strcmp(tokens[0], "exit") == 0) {
-        bin_exit(tokct, tokens);
-      } else if (strcmp(tokens[0], "alias") == 0) {
-        process_alias(tokct, tokens, 0);
-      } else if (strcmp(tokens[0], "clear") == 0) {
-        bin_clear(tokct, tokens);
-      } else if (strcmp(tokens[0], "cd") == 0) {
-        bin_cd(tokct, tokens);   // CD
-      } else if (strcmp(tokens[0], "ln") == 0) {
-        bin_ln(tokct, tokens);   // Link
-      } else if (strcmp(tokens[0], "rm") == 0) {
-        bin_rm(tokct, tokens);   // Remove
-      } else if (strcmp(tokens[0], "jobs") == 0) {
-        bin_jobs(tokct, tokens); // Jobs
-      } else if (strcmp(tokens[0], "fg") == 0) {
-        bin_fg(tokct, tokens);   // fg
-      } else if (strcmp(tokens[0], "bg") == 0) {
-        bin_bg(tokct, tokens);   // bg
-      } else {
-        if (strcmp(ppstr_final(tokens), "&") == 0) {
-          execute(tokens, argv, 1);
-        } else {
-          execute(tokens, argv, 0);
-        }
-      }
-    }
-    */
 
     // Waiting for all background processes here:
     int wret, wstatus;

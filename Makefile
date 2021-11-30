@@ -27,16 +27,16 @@ all: $(EXE)
 
 $(EXE): $(OBJ) | $(BIN_DIR)
 	#$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
-	$(CC) $(LDFLAGS) $^ -o $@
+	@$(CC) $(LDFLAGS) $^ -o $@
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DPROMPT -c $< -o $@
+	@$(CC) $(CPPFLAGS) $(CFLAGS) -DPROMPT -c $< -o $@
 
 $(OBJ_DIR) $(BIN_DIR):
-	mkdir -p $@
+	@mkdir -p $@
 
 clean:
-	@$(RM) -rv $(OBJ_DIR) $(BIN_DIR)
+	@rm -rv $(OBJ_DIR) $(BIN_DIR)
 
 -include $(OBJ:.o=.d)
 
