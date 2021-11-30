@@ -1,2 +1,0 @@
-/usr/bin/banner cs0330 >> redirect.txt
-/bin/cat redirect.txt

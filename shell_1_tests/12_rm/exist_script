@@ -1,6 +1,0 @@
-#!/bin/bash
-if [[ -e 33tmp_file.txt ]]; then
-	echo "exists"
-else
-	echo "doesn't exist"
-fi
