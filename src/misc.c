@@ -53,8 +53,8 @@ char *ppstr_final(char *alos[]) {
 }
 
 
-// notalpha. 1 on has a nonalphabetical 
-// char, 0 otherwise
+// notalpha. 1 when the passed string 
+// has a nonalphabetical char, 0 otherwise
 int notalpha(char *str) {
   int i;
   for (i = 0; i < strlen(str); i++) {
@@ -65,13 +65,19 @@ int notalpha(char *str) {
   return 0;
 }
 
-// str_tolower -- tolower but for 
-// strings instead of chars alone
-int str_tolower(char *str) {
+// 1 if the string is entirely lowercase.
+// 0 otherwise.
+//
+// behavior not defined for non-alphabetical
+// strings e.g. hidden files
+int str_islower(char *str) {
   int len = strlen(str);
   int i;
-  for (i = 0; i < strlen(str); i++) {
-    str[i] = tolower(str[i]);
+  
+  for (i = 0; i < len; i++) {
+    if(str[i] != tolower(str[i])) {
+      return 0;
+    }
   }
   return 1;
 }

@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ALPHABET_S 32 // size of alphabet
+#define ALPHABET_S 26 // size of alphabet
 #define ARR_SIZ(a) sizeof(a)/sizeof(a[0]) // QoL macro def's
 #define CHAR_TO_INDEX(c) ((int)c - (int)'a') 
 

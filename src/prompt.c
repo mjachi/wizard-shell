@@ -19,6 +19,11 @@ job_list_t *jobs_list = NULL;
 builtins_table *BI_TABLE = NULL;
 alias_table *AL_TABLE = NULL;
 
+// remember to work with *copies* of these
+
+char *HOME_PATH = NULL;
+char *PATH_VAR = NULL;
+
 
 /**
  * prompt.c 
@@ -189,8 +194,10 @@ int process_alias(int tok_count, char **tokens, int supress_output) {
     return -1;
   }
   
-  printf("\nAdded alias %s with definition: \n", name);
-  print_arr(tok_def);
+  if (!supress_output) {
+    printf("\nAdded alias %s with definition: \n", name);
+    print_arr(tok_def);
+  }
   return 0;
 }
 
@@ -206,9 +213,10 @@ int process_alias(int tok_count, char **tokens, int supress_output) {
 
 int wsh_rc_init() {
 
-  if (access("~/.wshrc", R_OK)){
+
+  //if (access(NULL, R_OK)){
     //FILE *config_file = fopen();
-  }
+  //}
 
   return 0;
 }
@@ -241,7 +249,7 @@ int wsh_rc_init() {
  * match in HT for "l" --> "ls -la", as is typical.
  */
 
-char **resolve_alias_shortcuts(char **tokens, char *home) {
+char **resolve_alias_shortcuts(char **tokens) {
   
   if (!AL_TABLE) {
     fprintf(stderr, "{wsh @ resolve_alias} -- alias table is a null pointer. This may be indicative\
@@ -261,7 +269,7 @@ char **resolve_alias_shortcuts(char **tokens, char *home) {
    */
   int bufsize = PS_BFS; 
   int i = 0;
-  int pos = i;
+  int pos = 0;
 
   char **f_tokens = malloc(bufsize * sizeof(char*));
 
@@ -270,19 +278,21 @@ char **resolve_alias_shortcuts(char **tokens, char *home) {
     exit(EXIT_FAILURE);
   }
 
-  // To control when we do and do not need to increment pos
-  int inc_bool = 1;
-
   while (tokens[i] != NULL) {
-    inc_bool = 1;
+    
     char **alias_toks;
     if (strcmp(tokens[i], "~") == 0) { // ~ shortcut
-      f_tokens[pos] = home;
-
-      //printf("f_tokens[%d] is %s", pos, f_tokens[pos]);
+      if (pos+1 >= bufsize) {
+        bufsize += PS_BFS;
+        f_tokens = realloc(f_tokens, bufsize * sizeof(char*));
+        if (!f_tokens) {
+          fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
+          exit(EXIT_FAILURE);
+        }
+      }
+      char *home = strcpy(home, HOME_PATH);
+      f_tokens[pos++] = home;
     } else if (strcmp(tokens[i], "*") == 0) { // * shortcut
-      int j;
-      
       char cwd_path[PATH_MAX];
       cwd_path[0] = 0;
 
@@ -292,14 +302,26 @@ char **resolve_alias_shortcuts(char **tokens, char *home) {
 
       struct dirent **fListTemp;
       int num_files = scandir(cwd_path, &fListTemp, NULL, alphasort);
+
+      if (pos+num_files >= bufsize) {
+        bufsize += PS_BFS;
+        f_tokens = realloc(f_tokens, bufsize * sizeof(char*));
+        if (!f_tokens) {
+          fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
+          exit(EXIT_FAILURE);
+        }
+      }
+      
+      int j;
       for (j = 0; j < num_files; j++) {
         char *curr = fListTemp[j]->d_name;
-        int hidden_bool = (strlen(curr) > 0) ? curr[0] == '.' : 1;
-        if (strcmp(curr, ".") == 0 || strcmp(curr, "..") == 0) {
+        int is_hidden = (strlen(curr) > 0) ? curr[0] == '.' : 1;
+        if (strcmp(curr, ".") == 0 || strcmp(curr, "..") == 0 || is_hidden) {
           continue;
-        } else {
-          f_tokens[i+j] = curr;
         }
+
+        f_tokens[pos++] = curr;
+        printf("\nAdded %s", f_tokens[pos - 1]);
       }
       int k;
       for (k = 0; k < num_files; k++) {
@@ -307,22 +329,10 @@ char **resolve_alias_shortcuts(char **tokens, char *home) {
       }
       free (fListTemp);
       
-
-      if (pos+j >= bufsize) {
-        bufsize += PS_BFS;
-        tokens = realloc(tokens, bufsize * sizeof(char*));
-        if (!tokens) {
-          fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
-          exit(EXIT_FAILURE);
-        }
-      }
-
-      pos+=j;
-      inc_bool=0;
+      printf("\n num_files - j = %d", num_files - j);
       
     } else if ((alias_toks = at_get(AL_TABLE, tokens[i])) != NULL) { // alias's
 
-      int j;
       int al_len = ppstrlen(alias_toks);
       printf("\nal_len %d", al_len);
       if (pos+al_len >= bufsize) {
@@ -334,32 +344,18 @@ char **resolve_alias_shortcuts(char **tokens, char *home) {
         }
       }
 
+      int j;
       for (j = 0; j < al_len; j++) {
-        f_tokens[pos+j] = alias_toks[j];
+        f_tokens[pos++] = alias_toks[j];
       }
-
-      pos += j;
-      inc_bool = 0;
 
     } else {
-      f_tokens[pos] = tokens[i];
+      f_tokens[pos++] = tokens[i];
     }
-
 
     i++;
-    if (inc_bool) {
-      if (pos+1 >= bufsize) {
-        bufsize += PS_BFS;
-        f_tokens = realloc(f_tokens, bufsize * sizeof(char*));
-        if (!f_tokens) {
-          fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
-          exit(EXIT_FAILURE);
-        }
-      }
-      pos++;
-    }
   }
-  f_tokens[pos+1] = NULL;
+  f_tokens[pos] = NULL;
   return f_tokens;
 }
 
@@ -554,18 +550,14 @@ int splash() {
   }
   fclose(mural_ptr);
   
-
+  int ret = 0;
   struct utsname unameData;
-  int ret;
-  
-  if ((ret = uname(&unameData))) {
+  if ((ret = uname(&unameData)) != 0) {
     printf("wsh (:wizard: shell)");
     return ret;
   }
 
-  char *node_name = unameData.nodename;
-  char *release = unameData.release;
-  printf("wsh (:wizard: shell) on %s running %s, \n\n", node_name, release);
+  printf("wsh (:wizard: shell) on %s running %s, \n\n", unameData.nodename, unameData.release);
   
   return 0;
 }
@@ -794,15 +786,15 @@ int wsh_main(int argc, char **argv) {
 
   // environment init for home path 
   // and username (for current user)
-  char *home = getenv("HOME");
+  HOME_PATH = getenv("HOME");
   char *uid = getenv("USER");
 
   if (!uid) {
     uid = "user";
   }
 
-  if (!home) {
-    home = "/";
+  if (!HOME_PATH) {
+    HOME_PATH = "/";
   }
 
   // set up jobs list
@@ -861,18 +853,92 @@ int wsh_main(int argc, char **argv) {
     // since additional alias's cannot be set up
     // (surely, setting up a wshrc file cannot be
     // too difficult)
-    char **argv = prep(resolve_alias_shortcuts(tokens, home));
+    char **f_tokens = resolve_alias_shortcuts(tokens);
+    char **argv = prep(f_tokens);
     
-    // Search through 
-    
-    return 0;
-  }
+    printf("\n");
+    if (!tokens){
+      // if error while parsing
+      fprintf(stderr, "\n\t{wsh @ headless -- parsing} -- ran into generic error parsing. exiting");
+      exit(-1);
+    }
+    if (!f_tokens){
+      // if error while parsing
+      fprintf(stderr, "\n\t{wsh @ headless -- resolving aliases and shortcuts} -- ran into generic error parsing. exiting");
+      exit(-1);
+    }
+    if (!argv) {
+      fprintf(stderr, "\n\t{wsh @ headless -- prepping} -- ran into generic error prepping. skipping");
+      exit(-1);
+    }
+    // since defined, gives the length of each to be passed into everything.
+    int tokct = ppstrlen(tokens);
+    int f_tokct = ppstrlen(f_tokens);
+    int argc = ppstrlen(argv);
 
-  // splash screen
-  if (splash() != 0){
-    fprintf(stderr, "{wsh @ init} -- failed splash screen");
-  } 
-  
+    if (f_tokct > 0) {
+      bin_builtin bi;
+      if (strcmp(argv[0], "alias") == 0) {
+        fprintf(stderr, "\n\t{wsh @ headless} -- cannot alias in headless");
+      } else {
+        execute(f_tokens, argv, 0);
+      }
+    }
+
+    // Waiting for all background processes here:
+    int wret, wstatus;
+    while ((wret = waitpid(-1, &wstatus,
+                         WNOHANG | WUNTRACED | WCONTINUED)) > 0) {
+      // examine all children who’ve terminated or stopped
+      int wjid = get_job_jid(jobs_list, wret);
+      if (WIFEXITED(wstatus)) {
+        // terminated normally
+        remove_job_pid(jobs_list, wret);
+        if (printf( "\n[%d] (%d) terminated with exit status %d\n", wjid,
+                    wret, WEXITSTATUS(wstatus)) < 0) {
+            fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
+            exit(-1);
+          }
+        }
+        if (WIFSIGNALED(wstatus)) {
+          // terminated by signal
+          remove_job_pid(jobs_list, wret);
+          if (printf("\n[%d] (%d) terminated by signal %d\n", wjid,
+                  wret, WTERMSIG(wstatus)) < 0) {
+            fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
+            exit(-1);
+
+            }
+        }
+        if (WIFSTOPPED(wstatus)) {
+          // stopped
+          update_job_pid(jobs_list, wret, STOPPED);
+          if (printf("\n[%d] (%d) suspended by signal %d\n", wjid,
+                        wret, WSTOPSIG(wstatus)) < 0) {
+           
+            fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
+            exit(-1);
+          }
+        }
+        if (WIFCONTINUED(wstatus)) {
+              
+          update_job_pid(jobs_list, wret, RUNNING);
+          if (printf("\n[%d] (%d) resumed\n", wjid, wret) < 0) {
+            fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
+            exit(-1);
+          }
+        }
+      }
+
+      cleanup_job_list(jobs_list);
+      return 0;
+    }
+
+    // splash screen
+    if (splash() != 0){
+      fprintf(stderr, "{wsh @ init} -- failed splash screen");
+    } 
+
 
   // set up completions tree
 
@@ -889,13 +955,12 @@ int wsh_main(int argc, char **argv) {
   tn_insert(completions, "exit");
 
   // Grab $PATH from env
-  char *pathvar = getenv("PATH");
-  char pathvar_cpy[strlen(pathvar)];
-  memset(pathvar_cpy, '\0', sizeof(pathvar_cpy));
+  PATH_VAR = getenv("PATH");
+  char pathvar_cpy[strlen(PATH_VAR)]; 
+  pathvar_cpy[0] = 0;
+  strcpy(pathvar_cpy, PATH_VAR);
 
-  strcpy(pathvar_cpy, pathvar);
-
-  if (pathvar) {
+  if (pathvar_cpy[0] != 0) {
     char *path;
     int i;
 
@@ -917,10 +982,9 @@ int wsh_main(int argc, char **argv) {
         char *curr = fListTemp[i]->d_name;
         if (strcmp(curr, ".")==0 || strcmp(curr, "..")==0){
           continue;
-        } else if (notalpha(curr)) {
+        } else if (notalpha(curr) ||  !str_islower(curr)) {
           continue;
         } else {
-          str_tolower(curr);
           tn_insert(completions, curr);
         }
       }
@@ -935,22 +999,21 @@ int wsh_main(int argc, char **argv) {
   }
 
   // Init the history data structures
-  
+
   history* h = malloc(sizeof(history));
   h->first = NULL;
   h->curr = NULL;
   h->count = 0;
 
   char bang[80];
-  char cwd[20];
   strcpy(bang, "\n");
   strcat(bang, uid);
   strcat(bang, " @ wsh % ");
 
   // Start in user's home directory
-  
-  if (chdir(home) < 0) {
-    perror("{wsh @ init chdir}");
+
+  if (chdir(HOME_PATH) < 0) {
+    perror("{wsh @ init chdir} ");
   }
 
   // REPL begins below
@@ -958,6 +1021,29 @@ int wsh_main(int argc, char **argv) {
   for (;;) { // beginning of this = new command
     
     // TODO -- add CWD files to completions
+    char cwd_path[PATH_MAX];
+    cwd_path[0] = 0;
+
+    if (getcwd(cwd_path, sizeof(cwd_path)) == NULL) {
+      fprintf(stderr, "{wsh @ alias's and shortcuts} -- couldn't retrieve the current working directory");
+    }
+
+    struct dirent **fListTemp;
+    int num_files = scandir(cwd_path, &fListTemp, NULL, alphasort);
+
+    int j;
+    for (j = 0; j < num_files; j++) {
+      char *curr = fListTemp[j]->d_name;
+      int is_hidden = (strlen(curr) > 0) ? curr[0] == '.' : 1;
+      if (strcmp(curr, ".") == 0 || strcmp(curr, "..") == 0 || is_hidden) {
+        continue;
+      } else if (notalpha(curr) || !str_islower(curr)) {
+        continue;
+      } else {
+        tn_insert(completions, curr);
+      }
+    }
+    
 
     if (printf("%s",bang) < 0) { // scuffed try catch for when we reach the bottom of the screen.
       fprintf(stderr, "\n\t{wsh @ REPL} -- unable to write to screen");
@@ -975,12 +1061,17 @@ int wsh_main(int argc, char **argv) {
 
     // tokenize 
     char **tokens = wsh_tokenize(buffer);
-    char **f_tokens = resolve_alias_shortcuts(tokens, home);
+    char **f_tokens = resolve_alias_shortcuts(tokens);
     char **argv = prep(f_tokens);
     printf("\n");
     if (!tokens){
       // if error while parsing
       fprintf(stderr, "\n\t{wsh @ REPL -- parsing} -- ran into generic error parsing. skipping");
+      continue;
+    }
+    if (!f_tokens){
+      // if error while parsing
+      fprintf(stderr, "\n\t{wsh @ REPL -- resolving aliases and shortcuts} -- ran into generic error parsing. skipping");
       continue;
     }
     if (!argv) {
@@ -992,8 +1083,7 @@ int wsh_main(int argc, char **argv) {
     int f_tokct = ppstrlen(f_tokens);
     int argc = ppstrlen(argv);
 
-    
-    if (tokct > 0) {
+    if (f_tokct > 0) {
       bin_builtin bi;
       if ((bi = bt_get(BI_TABLE, f_tokens[0])) != NULL) {
         (*bi) (f_tokct, f_tokens);
@@ -1062,9 +1152,23 @@ int wsh_main(int argc, char **argv) {
         }
       }
 
+    int k;
+    for (k = 0; k < num_files; k++) {
+      char *curr = fListTemp[k]->d_name;
+      int is_hidden = (strlen(curr) > 0) ? curr[0] == '.' : 1;
+      if (strcmp(curr, ".") == 0 || strcmp(curr, "..") == 0 || is_hidden) {
+        continue;
+      } else if (notalpha(curr) || !str_islower(curr)) {
+        continue;
+      } else {
+        tn_remove(completions, curr, 0);
+      }
+      free(fListTemp[k]);
+    }
+    free (fListTemp);
   }
 
   cleanup_job_list(jobs_list);
   return 0;
-} 
+  } 
 

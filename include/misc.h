@@ -20,7 +20,8 @@ char *ppstr_final(char *alos[]);
 // alphabetical characters
 int notalpha(char *str);
 
-// tolower for an entire string
-int str_tolower(char *str);
+// if the passed string is entirely lowercase 
+// letters, then 1; 0 otherwise
+int str_islower(char *str);
 
 #endif

@@ -89,8 +89,14 @@ TrieNode* tn_remove(TrieNode* root, char *key, int depth){
     }
  
     if (depth == strlen(key)) {
-        if (root->isLeaf) root->isLeaf = 0;
-        if (isEmpty(root)) free(root);
+        if (root->isLeaf) {
+            root->isLeaf = 0;
+        }
+        if (isEmpty(root)) {
+            free(root); 
+            root = NULL;
+        }
+        return root;
     }
     int index = key[depth] - 'a';
     root->children[index] =
