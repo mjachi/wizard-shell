@@ -116,7 +116,7 @@ int ht_set_internal(h_node* hns, int capacity, size_t* plength, const char *key,
 // factor obviously > 1
 void ht_blowup(hash_table* ht, double factor){
   if (factor <= 1) {
-    fprintf(stderr, "Factor of %d will not increase the HT", factor);
+    fprintf(stderr, "Factor of %f will not increase the HT", factor);
     return;
   }
 

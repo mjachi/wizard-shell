@@ -36,7 +36,7 @@ $(OBJ_DIR) $(BIN_DIR):
 	@mkdir -p $@
 
 clean:
-	@rm -rv $(OBJ_DIR) $(BIN_DIR)
+	@$(RM) -rv $(OBJ_DIR) $(BIN_DIR)
 
 -include $(OBJ:.o=.d)
 

@@ -206,9 +206,10 @@ int process_alias(int tok_count, char **tokens, int supress_output) {
 
 int wsh_rc_init() {
 
-  if (access("~/.wshrc", R_OK)){
+
+  //if (access(NULL, R_OK)){
     //FILE *config_file = fopen();
-  }
+  //}
 
   return 0;
 }
@@ -261,7 +262,7 @@ char **resolve_alias_shortcuts(char **tokens, char *home) {
    */
   int bufsize = PS_BFS; 
   int i = 0;
-  int pos = i;
+  int pos = 0;
 
   char **f_tokens = malloc(bufsize * sizeof(char*));
 
@@ -270,19 +271,20 @@ char **resolve_alias_shortcuts(char **tokens, char *home) {
     exit(EXIT_FAILURE);
   }
 
-  // To control when we do and do not need to increment pos
-  int inc_bool = 1;
-
   while (tokens[i] != NULL) {
-    inc_bool = 1;
+    
     char **alias_toks;
     if (strcmp(tokens[i], "~") == 0) { // ~ shortcut
-      f_tokens[pos] = home;
-
-      //printf("f_tokens[%d] is %s", pos, f_tokens[pos]);
+      if (pos+1 >= bufsize) {
+        bufsize += PS_BFS;
+        f_tokens = realloc(f_tokens, bufsize * sizeof(char*));
+        if (!f_tokens) {
+          fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
+          exit(EXIT_FAILURE);
+        }
+      }
+      f_tokens[pos++] = home;
     } else if (strcmp(tokens[i], "*") == 0) { // * shortcut
-      int j;
-      
       char cwd_path[PATH_MAX];
       cwd_path[0] = 0;
 
@@ -292,14 +294,27 @@ char **resolve_alias_shortcuts(char **tokens, char *home) {
 
       struct dirent **fListTemp;
       int num_files = scandir(cwd_path, &fListTemp, NULL, alphasort);
+
+      if (pos+num_files >= bufsize) {
+        bufsize += PS_BFS;
+        f_tokens = realloc(f_tokens, bufsize * sizeof(char*));
+        if (!f_tokens) {
+          fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
+          exit(EXIT_FAILURE);
+        }
+      }
+      
+      int j;
       for (j = 0; j < num_files; j++) {
         char *curr = fListTemp[j]->d_name;
-        int hidden_bool = (strlen(curr) > 0) ? curr[0] == '.' : 1;
-        if (strcmp(curr, ".") == 0 || strcmp(curr, "..") == 0) {
+        int is_hidden = (strlen(curr) > 0) ? curr[0] == '.' : 1;
+        printf("\ncurr is %s of len %lu", curr, strlen(curr));
+        if (strcmp(curr, ".") == 0 || strcmp(curr, "..") == 0 || is_hidden) {
           continue;
-        } else {
-          f_tokens[i+j] = curr;
         }
+
+        f_tokens[pos++] = curr;
+        printf("\nAdded %s", f_tokens[pos - 1]);
       }
       int k;
       for (k = 0; k < num_files; k++) {
@@ -307,22 +322,10 @@ char **resolve_alias_shortcuts(char **tokens, char *home) {
       }
       free (fListTemp);
       
-
-      if (pos+j >= bufsize) {
-        bufsize += PS_BFS;
-        tokens = realloc(tokens, bufsize * sizeof(char*));
-        if (!tokens) {
-          fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
-          exit(EXIT_FAILURE);
-        }
-      }
-
-      pos+=j;
-      inc_bool=0;
+      printf("\n num_files - j = %d", num_files - j);
       
     } else if ((alias_toks = at_get(AL_TABLE, tokens[i])) != NULL) { // alias's
 
-      int j;
       int al_len = ppstrlen(alias_toks);
       printf("\nal_len %d", al_len);
       if (pos+al_len >= bufsize) {
@@ -334,32 +337,22 @@ char **resolve_alias_shortcuts(char **tokens, char *home) {
         }
       }
 
+      int j;
       for (j = 0; j < al_len; j++) {
-        f_tokens[pos+j] = alias_toks[j];
+        f_tokens[pos++] = alias_toks[j];
       }
-
-      pos += j;
-      inc_bool = 0;
 
     } else {
-      f_tokens[pos] = tokens[i];
+      f_tokens[pos++] = tokens[i];
     }
-
 
     i++;
-    if (inc_bool) {
-      if (pos+1 >= bufsize) {
-        bufsize += PS_BFS;
-        f_tokens = realloc(f_tokens, bufsize * sizeof(char*));
-        if (!f_tokens) {
-          fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
-          exit(EXIT_FAILURE);
-        }
-      }
-      pos++;
-    }
   }
-  f_tokens[pos+1] = NULL;
+  f_tokens[pos] = NULL;
+  printf("\nf_tokens: ");
+  print_arr(f_tokens);
+
+  printf("\nlength: %d", ppstrlen(f_tokens));
   return f_tokens;
 }
 
@@ -554,18 +547,14 @@ int splash() {
   }
   fclose(mural_ptr);
   
-
+  int ret = 0;
   struct utsname unameData;
-  int ret;
-  
-  if ((ret = uname(&unameData))) {
+  if ((ret = uname(&unameData)) != 0) {
     printf("wsh (:wizard: shell)");
     return ret;
   }
 
-  char *node_name = unameData.nodename;
-  char *release = unameData.release;
-  printf("wsh (:wizard: shell) on %s running %s, \n\n", node_name, release);
+  printf("wsh (:wizard: shell) on %s running %s, \n\n", unameData.nodename, unameData.release);
   
   return 0;
 }
@@ -983,6 +972,11 @@ int wsh_main(int argc, char **argv) {
       fprintf(stderr, "\n\t{wsh @ REPL -- parsing} -- ran into generic error parsing. skipping");
       continue;
     }
+    if (!f_tokens){
+      // if error while parsing
+      fprintf(stderr, "\n\t{wsh @ REPL -- resolving aliases and shortcuts} -- ran into generic error parsing. skipping");
+      continue;
+    }
     if (!argv) {
       fprintf(stderr, "\n\t{wsh @ REPL -- prepping} -- ran into generic error prepping. skipping");
       continue;
@@ -992,8 +986,11 @@ int wsh_main(int argc, char **argv) {
     int f_tokct = ppstrlen(f_tokens);
     int argc = ppstrlen(argv);
 
+    printf("\ntokens:");
+    print_arr(tokens);
+
     
-    if (tokct > 0) {
+    if (f_tokct > 0) {
       bin_builtin bi;
       if ((bi = bt_get(BI_TABLE, f_tokens[0])) != NULL) {
         (*bi) (f_tokct, f_tokens);
