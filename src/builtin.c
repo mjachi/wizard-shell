@@ -122,7 +122,7 @@ int bin_jobs(int argc, char **argv) {
     }
 
     if (jcount == 0) {
-      printf("\nNo jobs to report");
+      printf("\n\tNo jobs to report");
       return 0;
     }
 
@@ -148,21 +148,15 @@ int bin_cd(int argc, char **argv){
         printf("\n\tcd: syntax error -- too many arguments");
         return -1;
     }
-    
-    if (strcmp(argv[1], "~") == 0 || argc==1) {
-      char *t = getenv("HOME");
-      char *rst = strchr(t, '\n');
-      if (!rst) {
-        *rst = '\0';
-      }
-      int s = chdir(t);
-      if (s < 0){
-        char *error = strerror(errno);
-        printf("\n\t cd: %s", error);
-        return -1;
-      }
-    }
 
+    if (argc == 1) {
+        char* home = getenv("HOME");
+        if (!home) {
+            home = "/";
+        }
+        argv[1] = home;
+    }
+    
     if (chdir(argv[1]) < 0) {
         char *error = strerror(errno);
         printf("\n\t cd: %s", error);
@@ -250,5 +244,34 @@ int bin_clear(int argc, char **argv) {
     return -1;
   }
   return 0;
+}
+
+/**
+ *
+ * Executes the exit command on the given tokens
+ *
+ * Parameters:
+ * - argc: token count in argv
+ * - argv: the tokenized input
+ *
+ * Exits before it returns anything.
+ */
+
+int bin_exit(int argc, char **argv) {
+    int ec = 0;
+    if (argc == 2) {
+        ec = atoi(argv[1]);
+        if (argv[1][0] != 48 && ec == 0) {
+            fprintf(stderr, "\n\texit: syntax error -- seems something besides\
+              an integer was passed as the argument");
+            return -1;
+        }
+    } else if (argc > 2) {
+        fprintf(stderr, "\n\texit: syntax error -- too many arguments");
+        return -1;
+    }
+    
+    cleanup_job_list(jobs_list);
+    exit(ec);
 }
 

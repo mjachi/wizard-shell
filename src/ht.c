@@ -76,8 +76,6 @@ char *strdup(const char *str)
 // I know little of this sort of work, so this is ripped 
 // from the internet.
 uint64_t ht_hash(const char* key){
-	assert(key);
-
 	uint64_t hash = 14695981039346656037UL;
 	for (const char* p = key; *p; p++) {
 			hash ^= (uint64_t)(unsigned char)(*p);
@@ -88,10 +86,6 @@ uint64_t ht_hash(const char* key){
 
 // Helper for blowup and recycled in the "public" set function below
 int ht_set_internal(h_node* hns, int capacity, size_t* plength, const char *key, void* val){
-  assert(hns);
-  assert(capacity > 50);
-  assert(key);
-  assert(val);
 
   uint64_t hash = ht_hash(key);
   int ind = (int)(hash & (uint64_t)(capacity-1));
@@ -121,8 +115,10 @@ int ht_set_internal(h_node* hns, int capacity, size_t* plength, const char *key,
 // 1.5x table size if need be 
 // factor obviously > 1
 void ht_blowup(hash_table* ht, double factor){
-	assert(ht);
-  assert(factor > 1);
+  if (factor <= 1) {
+    fprintf(stderr, "Factor of %d will not increase the HT", factor);
+    return;
+  }
 
   size_t new_cap = (size_t) (factor * ht->size);
 	h_node* new_nodes = calloc(new_cap, sizeof(h_node*));
@@ -159,7 +155,11 @@ void ht_blowup(hash_table* ht, double factor){
  * NULL on fail.
  */
 hash_table* ht_new_ht(int size) {
-	assert(size > 0);
+  
+  if (size < 1) {
+    fprintf(stderr, "size cannot be negative");
+    return NULL;
+  }
 
 	hash_table* ht = malloc(sizeof(hash_table));
 	if(!ht) { // NULL will be used for error checking.
@@ -189,7 +189,6 @@ hash_table* ht_new_ht(int size) {
  *
  */
 int ht_delete_ht(hash_table* ht){
-	assert(ht); 
 
   // Free mem from each element
 	size_t i;
@@ -212,9 +211,6 @@ int ht_delete_ht(hash_table* ht){
  * Returns 0 if it failed to insert and 1 if succeeded
  */
 int ht_set(hash_table* ht, char *key, void* val){
-	assert(ht);
-	assert(key);
-	assert(val);
 
 	if (ht->count >= ht->size) {
 		ht_blowup(ht, 1.5);
@@ -234,8 +230,6 @@ int ht_set(hash_table* ht, char *key, void* val){
  * or generic failure
  */
 void* ht_get(hash_table* ht, const char *key){
-  assert(ht);
-  assert(key);
 
   size_t i = (size_t) (ht_hash(key) & (uint64_t)(ht->size-1)); 
   // idea is to take hash and cast to something we can index with
@@ -255,7 +249,6 @@ void* ht_get(hash_table* ht, const char *key){
  * or we will have a seg-fault.
  */
 int ht_count(hash_table* ht) {
-  assert(ht);
   return ht->count;
 }
 
@@ -267,10 +260,6 @@ int ht_count(hash_table* ht) {
  * since this is required in the realloc'ing process
  */
 int bt_set_internal(b_node* bns, int capacity, size_t* plength, const char *name, bin_builtin bi){
-  assert(bns);
-  assert(capacity > 50);
-  assert(name);
-  assert(bi);
 
   uint64_t hash = ht_hash(name);
   int ind = (int)(hash & (uint64_t)(capacity-1));
@@ -305,8 +294,6 @@ int bt_set_internal(b_node* bns, int capacity, size_t* plength, const char *name
  *
  */
 void bt_blowup(builtins_table* bt, double factor){
-	assert(bt);
-  assert(factor > 1);
 
   size_t new_cap = (size_t) (factor * bt->size);
 	b_node* new_nodes = calloc(new_cap, sizeof(b_node*));
@@ -339,7 +326,6 @@ void bt_blowup(builtins_table* bt, double factor){
  * NULL on fail.
  */
 builtins_table* bt_new_bt(int size) {
-	assert(size > 0);
 
 	builtins_table* bt = malloc(sizeof(builtins_table));
 	if(!bt) { // NULL will be used for error checking.
@@ -369,7 +355,6 @@ builtins_table* bt_new_bt(int size) {
  *
  */
 int bt_delete_bt(builtins_table* bt) {
-	assert(bt); 
 
   // Free mem from each element
 	size_t i;
@@ -392,9 +377,6 @@ int bt_delete_bt(builtins_table* bt) {
  * Returns 0 if it failed to insert and 1 if succeeded
  */
 int bt_set(builtins_table* bt, char *name, bin_builtin bin) {
-	assert(bt);
-	assert(name);
-	assert(bin);
 
 	if (bt->count >= bt->size) {
 		bt_blowup(bt, 1.5);
@@ -413,8 +395,6 @@ int bt_set(builtins_table* bt, char *name, bin_builtin bin) {
  * or generic failure
  */
 bin_builtin bt_get(builtins_table* bt, const char *name) {
-  assert(bt);
-  assert(name);
 
   size_t i = (size_t) (ht_hash(name) & (uint64_t)(bt->size-1)); 
   // idea is to take hash and cast to something we can index with
@@ -446,10 +426,6 @@ int bt_count(builtins_table* bt) {
  * to resizing/ blowup below
  */
 int at_set_internal(a_node* ans, int capacity, size_t* plength, const char *key, char** val){
-  assert(ans);
-  assert(capacity > 50);
-  assert(key);
-  assert(val);
 
   uint64_t hash = ht_hash(key);
   int ind = (int)(hash & (uint64_t)(capacity-1));
@@ -482,8 +458,6 @@ int at_set_internal(a_node* ans, int capacity, size_t* plength, const char *key,
  * Resizing logic for the alias_table.
  */
 void at_blowup(alias_table* at, double factor){
-	assert(at);
-  assert(factor > 1);
 
   size_t new_cap = (size_t) (factor * at->size);
 	a_node* new_nodes = calloc(new_cap, sizeof(a_node*));
@@ -518,7 +492,6 @@ void at_blowup(alias_table* at, double factor){
  * NULL on fail.
  */
 alias_table* at_new_at(int size) {
-	assert(size > 0);
 
 	alias_table* at = malloc(sizeof(alias_table));
 	if(!at) { // NULL will be used for error checking.
@@ -548,7 +521,6 @@ alias_table* at_new_at(int size) {
  *
  */
 int at_delete_at(alias_table* at){
-	assert(at); 
 
   // Free mem from each element
 	size_t i;
@@ -571,9 +543,6 @@ int at_delete_at(alias_table* at){
  * Returns 0 if it failed to insert and 1 if succeeded
  */
 int at_set(alias_table* at, char *abbr, char **tok_ext){
-	assert(at);
-	assert(abbr);
-	assert(tok_ext);
 
 	if (at->count >= at->size) {
 		at_blowup(at, 1.5);
@@ -593,8 +562,6 @@ int at_set(alias_table* at, char *abbr, char **tok_ext){
  * or generic failure
  */
 char** at_get(alias_table* at, const char *abbr){
-  assert(at);
-  assert(abbr);
 
   size_t i = (size_t) (ht_hash(abbr) & (uint64_t)(at->size-1)); 
   // idea is to take hash and cast to something we can index with

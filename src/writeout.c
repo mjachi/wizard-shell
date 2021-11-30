@@ -41,3 +41,26 @@ int getch(void){
 }
 
 
+// Print out an array of strings
+int print_arr(char **out) {
+  if (!out) {
+    return -1;
+  }
+  
+  int i = 0;
+
+  while (out[i]) {
+    if (printf("%s ", out[i]) < 0) {
+      fprintf(stderr, "{wsh @ print_arr} -- failed to print out the %d'th string in the array", i);
+      return -1;
+    }
+    i++;
+  }
+  if (printf("\n") < 0) {
+    fprintf(stderr, "\n\t{wsh @ print_arr} -- failed to print new line");
+    return -1;
+  }
+  return 0;
+}
+
+
