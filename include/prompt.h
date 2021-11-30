@@ -19,6 +19,9 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <stdio.h>
+#include <dirent.h>
+#include <limits.h>
+#include <sys/utsname.h>
 
 #include "history.h"
 #include "completions.h"
@@ -26,8 +29,13 @@
 #include "ht.h"
 #include "builtin.h"
 
-#define BUFF_SIZE 1024
-#define TOKS 512
+#define _BSD_SOURCE
+#define _XOPEN_SORUCE 700
+#define UNUSED(x) (void)(x)
+
+extern int jcount;
+extern job_list_t *jobs_list;
+
 
 int wsh_main(int argc, char **argv);
 

@@ -17,4 +17,6 @@ void clear_line_buffer(int len, int p);
 int getch(void);
 void whitespace(int n);
 
+int print_arr(char** out);
+
 #endif

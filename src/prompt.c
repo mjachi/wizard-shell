@@ -1,13 +1,8 @@
 #include "prompt.h"
+#include "global.h"
 #include "misc.h"
 #include "writeout.h"
-#include <dirent.h>
-#include <limits.h>
-#include <sys/utsname.h>
 
-#define _BSD_SOURCE
-#define _XOPEN_SORUCE 700
-#define UNUSED(x) (void)(x)
 #define MAX_HOST 253
 #define MAX_PATH 4096
 #define BANG_MAX 64
@@ -18,8 +13,12 @@
 
 
 extern int errno;
-job_list_t *jobs_list;
-int jcount;
+int jcount = 0;
+job_list_t *jobs_list = NULL;
+
+builtins_table *BI_TABLE = NULL;
+alias_table *AL_TABLE = NULL;
+
 
 /**
  * prompt.c 
@@ -27,95 +26,19 @@ int jcount;
  * Contains I/O and REPL implementations.
  */
 
-int bin_fg(int argc, char **argv) {
-    if (argc != 2) {
-        printf("\n\tfg: syntax error -- requires exactly one argument");
-        return -1;
-    }
 
-    if (argv[1][0] != '%') {
-        printf("\n\tfg: job input does not begin with %%\n");
-        return -1;
-    }
+/**
+ * Tokenizes the line as desired.
+ *
+ * Parameters:
+ * - line: just the raw input line (after resolving aliases
+ *   and shortcuts)
+ *
+ * Returns char**, an array with the tokens on ' '
+ *
+ *
+ */
 
-    int jid = atoi(argv[1] + 1);
-    pid_t pid = get_job_pid(jobs_list, jid);
-    if (pid < 0) {
-        printf("\n\tjob not found\n");
-        return -1;
-    }
-
-    tcsetpgrp(STDIN_FILENO, pid);
-    if (kill(-1 * pid, SIGCONT) < 0) {
-        printf("\n\t{wsh @ bin_fg} -- error in continuing the job");
-        return -1;
-    }
-
-    int wret, wstatus;
-    if ((wret = waitpid(pid, &wstatus, WUNTRACED)) > 0) {
-        if (WIFEXITED(wstatus)) {
-            remove_job_jid(jobs_list, jid);
-        }
-        if (WIFSIGNALED(wstatus)) {
-            remove_job_jid(jobs_list, jid);
-            if (!printf("\n[%d] (%d) terminated by signal %d\n", jcount,
-                        wret, WTERMSIG(wstatus))) {
-                fprintf(stderr,"\n\t{wsh @ bin_fg} -- error writing to output\n");
-            }
-        }
-        if (WIFSTOPPED(wstatus)) {
-            update_job_jid(jobs_list, jid, STOPPED);
-            if (!printf("\n\t[%d] (%d) suspended by signal %d\n", jcount,
-                        wret, WSTOPSIG(wstatus))) {
-                fprintf(stderr,"\n\t{wsh @ bin_fg} -- error writing to output\n");
-            }
-        }
-    }
-
-    tcsetpgrp(STDIN_FILENO, getpgrp());
-    return 0;
-}
-
-int bin_bg(int argc, char **argv) {
-    // Checks that there's at least 1 arguments after the ln string
-    if (argc != 2) {
-        printf("\n\tbg: syntax error -- requires exactly one argument\n");
-        return -1;
-    }
-
-    if (argv[1][0] != '%') {
-        printf("\n\tbg: job input does not begin with %%\n");
-        return -1;
-    }
-
-    int jid = atoi(argv[1] + 1);
-    pid_t pid = get_job_pid(jobs_list, jid);
-    if (pid < 0) {
-        printf("\n\t{wsh @ bg} -- job not found with code %d\n", pid);
-        return -1;
-    }
-
-    if (kill(-1 * pid, SIGCONT) < 0) {
-        printf("\n\t{wsh @ bg} -- error in continuing the job");
-        return -1;
-    }
-
-  return 0;
-}
-
-
-int bin_jobs(int argc, char **argv) {
-    if (argc != 1) {
-        printf("\n\tjobs: syntax error -- too many arguments; doesn't take any\n");
-        return -1;
-    }
-
-    jobs(jobs_list);
-    return 0;
-}
-
-
-// Tokenize the buffer as desired.
 char **wsh_tokenize(char *line) {
   int bufsize = PS_BFS; 
   int pos = 0;
@@ -149,7 +72,17 @@ char **wsh_tokenize(char *line) {
   return tokens;
 }
 
-// Take tokens and returns argv
+/**
+ * Processes the tokens as desired.
+ *
+ * Parameters:
+ * - tokens: just the output of wsh_tokenize, in short
+ *
+ * Returns: another char** with a processed set of tokens
+ * e.g. /bin/echo -> echo
+ * and some others
+ *
+ */
 char **prep (char **tokens) {
   int bufsize = PS_BFS;
   int pos = 0;
@@ -189,17 +122,269 @@ char **prep (char **tokens) {
 }
 
 
-// executes a given command per tokens and argv
+/** 
+ * Processes an input alias definition
+ *
+ * MUST be of the form 
+ *
+ * > alias name = here is the definition
+ *
+ * errs otherwise. No space allowed in 
+ * between the equal sign as with zsh. 
+ * Will note expect anything after the 
+ * second quote.
+ *
+ * Parameters:
+ * - argc: the count of argv
+ * - argv: raw input tokens
+ */
+
+int process_alias(int tok_count, char **tokens, int supress_output) {
+  if (tok_count < 4) {
+    fprintf(stderr, "\n\t{wsh @ process_alias} -- needs a definition");
+    return -1;
+  }
+  
+  if (AL_TABLE == NULL) {
+    fprintf(stderr, "\n\t{wsh @ process_alias} -- alias table is not defined; \
+      this may be indicative of an allocation or overflow that was not caught \
+      elsewhere. Exiting");
+    exit(EXIT_FAILURE);
+  }
+
+
+  int seen_equals = 0;
+  int seen_first_quote = 0;
+
+  char *name = tokens[1];
+
+  if (strcmp(tokens[2], "=") != 0) {
+    fprintf(stderr, "\n\t{wsh @ process_alias} -- bad formatting; = was not found as the 3rd token from your\
+      input. Recall \"alias name = here is the definition\"");
+    return -1;
+  }
+
+  int bufsize = PS_BFS;
+
+  char **tok_def = malloc(sizeof(char*) * bufsize);
+
+  int i = 3;
+  
+  while (tokens[i]) {
+    tok_def[i - 3] = tokens[i];
+
+    if (i+1 >= bufsize) {
+      bufsize += PS_BFS;
+      tok_def = realloc(tok_def, bufsize * sizeof(char*));
+      if (!tokens) {
+        fprintf(stderr, "{wsh @ prep} -- error allocating for buffer");
+        exit(EXIT_FAILURE);
+      }
+    }
+    i++;
+  }
+
+  if (at_set(AL_TABLE, name, tok_def) != 0){
+    fprintf(stderr, "\n\t{wsh @ process_alias} -- failed to add the given definition to the alias table");
+    return -1;
+  }
+  
+  printf("\nAdded alias %s with definition: \n", name);
+  print_arr(tok_def);
+  return 0;
+}
+
+
+/**
+ * Searches for a .wshrc in one a few places
+ *
+ * If it exists, we set values accordingly and place aliases
+ * in the table, surpressing output.
+ *
+ * Of course, if it doesn't exist, we simply return and print a message.
+ */
+
+int wsh_rc_init() {
+
+  if (access("~/.wshrc", R_OK)){
+    //FILE *config_file = fopen();
+  }
+
+  return 0;
+}
+
+/**
+ * Returns a new set of tokens with aliases filled in. Also
+ * fills in the following harcoded shortcuts:
+ *
+ * "*" -- when a standalone token, extends into all files
+ * and folders excluding the links to cwd and pwd.
+ *
+ * Currently, won't play nicely with e.g. "*.c", which 
+ * the user likely intended to fill out with everything 
+ * in cwd that had the extension for a C source file
+ *
+ * "~" -- as usual, routes to the current user's home directory 
+ * if it can be found, otherwise errs and re-enters the REPL.
+ *
+ * These are hardcoded, but this could definitely be done 
+ * with something similar to the alias hashtables
+ *
+ * Parameters:
+ * - tokens: the raw input tokens.
+ * - aliass: pointer to the hash_table that contains all the 
+ *   aliass for a run time.
+ *
+ * Returns: an array of strings where each token is replaced
+ * with a value in the alias HT if there is a match.
+ * e.g. "l /etc" --> "ls -la /etc", granted that there is a 
+ * match in HT for "l" --> "ls -la", as is typical.
+ */
+
+char **resolve_alias_shortcuts(char **tokens, char *home) {
+  
+  if (!AL_TABLE) {
+    fprintf(stderr, "{wsh @ resolve_alias} -- alias table is a null pointer. This may be indicative\
+      of overflow/ allocation issues elsewhere, or it simply wasn't initialized. Exiting.");
+    exit(EXIT_FAILURE);
+  }
+
+  /**
+   * bufsize -- manages the size of f_tokens
+   *
+   * i -- used to index tokens (the input)
+   *
+   * pos -- used to index f_tokens
+   *
+   * j -- used to index whatever we need to 
+   *      in the given context
+   */
+  int bufsize = PS_BFS; 
+  int i = 0;
+  int pos = i;
+
+  char **f_tokens = malloc(bufsize * sizeof(char*));
+
+  if (!f_tokens) {
+    fprintf(stderr, "{wsh @ tokenize} -- error allocating for resolved token array");
+    exit(EXIT_FAILURE);
+  }
+
+  // To control when we do and do not need to increment pos
+  int inc_bool = 1;
+
+  while (tokens[i] != NULL) {
+    inc_bool = 1;
+    char **alias_toks;
+    if (strcmp(tokens[i], "~") == 0) { // ~ shortcut
+      f_tokens[pos] = home;
+
+      //printf("f_tokens[%d] is %s", pos, f_tokens[pos]);
+    } else if (strcmp(tokens[i], "*") == 0) { // * shortcut
+      int j;
+      
+      char cwd_path[PATH_MAX];
+      cwd_path[0] = 0;
+
+      if (getcwd(cwd_path, sizeof(cwd_path)) == NULL) {
+        fprintf(stderr, "{wsh @ alias's and shortcuts} -- couldn't retrieve the current working directory");
+      }
+
+      struct dirent **fListTemp;
+      int num_files = scandir(cwd_path, &fListTemp, NULL, alphasort);
+      for (j = 0; j < num_files; j++) {
+        char *curr = fListTemp[j]->d_name;
+        int hidden_bool = (strlen(curr) > 0) ? curr[0] == '.' : 1;
+        if (strcmp(curr, ".") == 0 || strcmp(curr, "..") == 0) {
+          continue;
+        } else {
+          f_tokens[i+j] = curr;
+        }
+      }
+      int k;
+      for (k = 0; k < num_files; k++) {
+        free(fListTemp[k]);
+      }
+      free (fListTemp);
+      
+
+      if (pos+j >= bufsize) {
+        bufsize += PS_BFS;
+        tokens = realloc(tokens, bufsize * sizeof(char*));
+        if (!tokens) {
+          fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
+          exit(EXIT_FAILURE);
+        }
+      }
+
+      pos+=j;
+      inc_bool=0;
+      
+    } else if ((alias_toks = at_get(AL_TABLE, tokens[i])) != NULL) { // alias's
+
+      int j;
+      int al_len = ppstrlen(alias_toks);
+      printf("\nal_len %d", al_len);
+      if (pos+al_len >= bufsize) {
+        bufsize += PS_BFS;
+        tokens = realloc(tokens, bufsize * sizeof(char*));
+        if (!tokens) {
+          fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
+          exit(EXIT_FAILURE);
+        }
+      }
+
+      for (j = 0; j < al_len; j++) {
+        f_tokens[pos+j] = alias_toks[j];
+      }
+
+      pos += j;
+      inc_bool = 0;
+
+    } else {
+      f_tokens[pos] = tokens[i];
+    }
+
+
+    i++;
+    if (inc_bool) {
+      if (pos+1 >= bufsize) {
+        bufsize += PS_BFS;
+        f_tokens = realloc(f_tokens, bufsize * sizeof(char*));
+        if (!f_tokens) {
+          fprintf(stderr, "{wsh @ alias's and shortcuts} -- error reallocating for resolved token array");
+          exit(EXIT_FAILURE);
+        }
+      }
+      pos++;
+    }
+  }
+  f_tokens[pos+1] = NULL;
+  return f_tokens;
+}
+
+
+
+/**
+ * Executes a given command based on the tokens and argv
+ * This also contains all of the file redirection
+ * and most of the jobs handling logic.
+ *  
+ * Parameters: 
+ * tokens -- the raw tokenized
+ * argv -- the processed tokenized
+ * is_background -- 1 if the given command 
+ *    is meant to be bg'ed, 0 otherwise.
+ */
 void execute(char **tokens, char **argv,
                  int is_background) {
-    // Initial Variables
     char *input = "\0";
     char *clobber = "\0";  // for ">"
     char *dclobber = "\0";  // for ">>"
 
     int store_errno = 0;
 
-    // find redirection symbols
+    // Find redirection symbols
     for (int i = 0; tokens[i] != NULL; i++) {
       if (strcmp(tokens[i], "<") == 0) {
         if (strcmp(input, "\0") == 0) {
@@ -255,14 +440,15 @@ void execute(char **tokens, char **argv,
 
     pid_t pid = 0;
 
-    if (!(pid = fork())) { // child process
+    // Fork to reach child process
+    if (!(pid = fork())) {
         pid = getpid();
         setpgid(pid, pid);
         if (!is_background) {
             tcsetpgrp(STDIN_FILENO, pid);
         }
 
-        // for parent
+        // For parent process.
         signal(SIGINT, SIG_DFL);
         signal(SIGTSTP, SIG_DFL);
         signal(SIGTTOU, SIG_DFL);
@@ -302,11 +488,9 @@ void execute(char **tokens, char **argv,
         // Executes the command in the child process
         
         char *fnr = first_nonredirect(tokens, "\0");
-
         execvp(fnr, argv);
 
         perror("\n\t{wsh @ execvp} ");
-        printf("\ncommand: \"%s\" of length %d", fnr, strlen(fnr));
         exit(1);
     }
 
@@ -352,7 +536,10 @@ void execute(char **tokens, char **argv,
 /**
  * splash
  *
- * just a "pretty"-fying function that prints a splash screen with some info.
+ * just a "pretty"-fying function that prints a splash screen with 
+ * some info. Splash screen is precisely whatever's found in 
+ * the mural.txt in the project root directory.
+ *
  */
 int splash() {
   FILE *mural_ptr = fopen("mural.txt", "r");
@@ -369,24 +556,33 @@ int splash() {
   
 
   struct utsname unameData;
-  int ret = uname(&unameData);
+  int ret;
   
-  if (ret) {
+  if ((ret = uname(&unameData))) {
     printf("wsh (:wizard: shell)");
     return ret;
   }
 
-  printf("wsh (:wizard: shell) on %s running %s, \n\n", unameData.nodename, unameData.release);
+  char *node_name = unameData.nodename;
+  char *release = unameData.release;
+  printf("wsh (:wizard: shell) on %s running %s, \n\n", node_name, release);
   
   return 0;
 }
 
 
-// get_line
-//
-// meant to abstract away the line reading behavior.
-// After this, we resolve alias's. Requires access to history
-// and completions tree.
+/**
+ * get_line 
+ *
+ * Reads in a line from the user using a custom implementation 
+ * of getch() to mimic the one functionality from ncurses that
+ * is needed for this --- basically just messes with termios
+ * such that we read in the character and still have complete
+ * and total control over what we do with it. Hence, we must
+ * ensure that each arbitrary character is placed into the 
+ * buffer and printed out
+ *
+ */
 char *get_line(history* hist, TrieNode *completions) {
   int bufsize = RL_BFS;
   int pos = 0;
@@ -435,7 +631,7 @@ char *get_line(history* hist, TrieNode *completions) {
           } else if (hist_iter == 0 && hist->first) {
             // Clear buffer && line
             clear_line_buffer(strlen(buffer),pos);
-            memset(buffer, 0, sizeof(buffer));
+            memset(buffer, '\0', bufsize * sizeof(char));
             // Copy command into buffer
             char *hcm = hist->first->command;
             strcpy(buffer, hcm);
@@ -448,7 +644,7 @@ char *get_line(history* hist, TrieNode *completions) {
           } else if (hist->curr->next) {
             // Clear buffer && line
             clear_line_buffer(strlen(buffer), pos);
-            memset(buffer, 0, sizeof(buffer));
+            memset(buffer, '\0', bufsize * sizeof(char));
             // Copy command into buffer
             char *hcm = hist->curr->next->command;
             strcpy(buffer, hcm);
@@ -458,11 +654,6 @@ char *get_line(history* hist, TrieNode *completions) {
             // Increment
             hist->curr = hist->curr->next;
           }
-
-          // Going up --> back to clear --> up 
-          // fails...
-          // TODO -- fix that
-          // Any other cases should be left as is.
           break;
         case 66: // Down
           if (hist_iter == 0 || !hist->first) {
@@ -470,7 +661,7 @@ char *get_line(history* hist, TrieNode *completions) {
           } else if (hist->curr->prev) {
             // Clear buffer && line
             clear_line_buffer(strlen(buffer), pos);
-            memset(buffer, 0, sizeof(buffer));
+            memset(buffer, '\0', bufsize * sizeof(char));
             // Copy command into buffer
             char *hcm = hist->curr->prev->command;
             strcpy(buffer, hcm);
@@ -482,11 +673,10 @@ char *get_line(history* hist, TrieNode *completions) {
           } else if (!hist->curr->prev && strlen(buffer) > 0) {
             // Clear buffer && line
             clear_line_buffer(strlen(buffer), pos);
-            memset(buffer, 0, sizeof(buffer));
+            memset(buffer, '\0', bufsize * (sizeof(char*)));
             pos = 0;
             hist_iter = 0;
           }
-          // Any other cases should be left as is.
           break;
         case 67: // Right
           if (pos < strlen(buffer)) {
@@ -597,26 +787,92 @@ char *get_line(history* hist, TrieNode *completions) {
 
 /**
  * Main REPL driving function.
+ *
+ * Also controls e.g. "wsh ls"
  */
 int wsh_main(int argc, char **argv) {
-  // Setting up the Initial Variables for the Main Function
-  char *tokens[TOKS];
-  char *execv[TOKS];
-  ssize_t count;
+
+  // environment init for home path 
+  // and username (for current user)
+  char *home = getenv("HOME");
+  char *uid = getenv("USER");
+
+  if (!uid) {
+    uid = "user";
+  }
+
+  if (!home) {
+    home = "/";
+  }
+
+  // set up jobs list
+  
+  jobs_list = init_job_list();
+
+  // init alias HT
+
+  AL_TABLE = at_new_at(50);
+  if (AL_TABLE == NULL) {
+    fprintf(stderr, "{wsh @ init} -- ");
+  }
+
+  // Init builtins HT
+
+  BI_TABLE = bt_new_bt(50);
+  if (BI_TABLE == NULL) {
+    fprintf(stderr, "{wsh @ init} -- ");
+  }
+
+  bt_set(BI_TABLE, "clear", &bin_clear);
+  bt_set(BI_TABLE, "cd", &bin_cd);
+  bt_set(BI_TABLE, "ln", &bin_ln);
+  bt_set(BI_TABLE, "jobs", &bin_jobs);
+  bt_set(BI_TABLE, "fg", &bin_fg);
+  bt_set(BI_TABLE, "bg", &bin_bg);
+  bt_set(BI_TABLE, "exit", &bin_exit);
+
+  /**
+   * Any hardcoded alias's should be placed 
+   * in the wshrc file; the function essentially
+   * looks to add aliases and set environment things
+   * e.g. home directory.
+   *
+   * Processing is based on spaces:
+   *
+   * home = /abc/xyz
+   * alias l = ls -la
+   * 
+   */
+
+  // TODO -- .wshrc configuration
+  wsh_rc_init();
+  
+  /** 
+   * Headless execution... much faster since
+   * there are far fewer initializations 
+   * needed to complete this.
+   */
+  if (argc > 1) { 
+    
+    // Place the rest of argv inside of 
+    // tokens as needed.
+    char **tokens = &argv[1];
+    // the following is expensive during headless, 
+    // since additional alias's cannot be set up
+    // (surely, setting up a wshrc file cannot be
+    // too difficult)
+    char **argv = prep(resolve_alias_shortcuts(tokens, home));
+    
+    // Search through 
+    
+    return 0;
+  }
 
   // splash screen
-  //splash(); 
+  if (splash() != 0){
+    fprintf(stderr, "{wsh @ init} -- failed splash screen");
+  } 
   
-  // jobs init
-
-  jobs_list = init_job_list();
-  jcount = 0;
-
-  // Setting up signal ignores in parent:
-
-  signal(SIGINT, SIG_IGN);
-  signal(SIGTSTP, SIG_IGN);
-  signal(SIGTTOU, SIG_IGN);
 
   // set up completions tree
 
@@ -629,9 +885,15 @@ int wsh_main(int argc, char **argv) {
   tn_insert(completions, "rm");
   tn_insert(completions, "jobs");
   tn_insert(completions, "fg");
+  tn_insert(completions, "clear");
+  tn_insert(completions, "exit");
 
   // Grab $PATH from env
   char *pathvar = getenv("PATH");
+  char pathvar_cpy[strlen(pathvar)];
+  memset(pathvar_cpy, '\0', sizeof(pathvar_cpy));
+
+  strcpy(pathvar_cpy, pathvar);
 
   if (pathvar) {
     char *path;
@@ -641,7 +903,7 @@ int wsh_main(int argc, char **argv) {
     // then use that immediately to 
     // scandir, and add everything in 
     // there to the completions system
-    path = strtok(pathvar, ":");
+    path = strtok(pathvar_cpy, ":");
     while (path) {
       // Scan directory
       struct dirent **fListTemp;
@@ -679,24 +941,6 @@ int wsh_main(int argc, char **argv) {
   h->curr = NULL;
   h->count = 0;
 
-  // init alias HT
-
-  HashTable *aliass = newHashTable(50);
-
-  // TODO -- Init builtins HT
-
-  // environment init
-  char *home = getenv("HOME");
-  char *uid = getenv("USER");
-
-  if (!uid) {
-    uid = "user";
-  }
-
-  if (!home) {
-    home = "/";
-  }
-
   char bang[80];
   char cwd[20];
   strcpy(bang, "\n");
@@ -713,13 +957,15 @@ int wsh_main(int argc, char **argv) {
 
   for (;;) { // beginning of this = new command
     
+    // TODO -- add CWD files to completions
+
     if (printf("%s",bang) < 0) { // scuffed try catch for when we reach the bottom of the screen.
-      fprintf(stderr, "{wsh @ REPL} -- unable to write to screen\n");
+      fprintf(stderr, "\n\t{wsh @ REPL} -- unable to write to screen");
       return -1;
     }
 
     if (fflush(stdout) < 0) {
-      fprintf(stderr, "{wsh @ REPL} -- unable to flush stdout\n");
+      fprintf(stderr, "\n\t{wsh @ REPL} -- unable to flush stdout");
       return -1;
     }
 
@@ -729,52 +975,44 @@ int wsh_main(int argc, char **argv) {
 
     // tokenize 
     char **tokens = wsh_tokenize(buffer);
-    char **argv = prep(tokens);
+    char **f_tokens = resolve_alias_shortcuts(tokens, home);
+    char **argv = prep(f_tokens);
     printf("\n");
     if (!tokens){
       // if error while parsing
-      fprintf(stderr, "{wsh @ REPL -- parsing} -- ran into generic error parsing\n");
+      fprintf(stderr, "\n\t{wsh @ REPL -- parsing} -- ran into generic error parsing. skipping");
       continue;
     }
     if (!argv) {
-      fprintf(stderr, "{wsh @ REPL -- prepping} -- ran into generic error prepping\n");
+      fprintf(stderr, "\n\t{wsh @ REPL -- prepping} -- ran into generic error prepping. skipping");
       continue;
     }
     // since defined, gives the length of each to be passed into everything.
     int tokct = ppstrlen(tokens);
+    int f_tokct = ppstrlen(f_tokens);
     int argc = ppstrlen(argv);
 
-    // TODO -- builtin hashtable
+    
     if (tokct > 0) {
-      if (strcmp(tokens[0], "exit") == 0) {
-        int ec = 0;
-        if (tokct == 2){
-          ec = atoi(tokens[1]);
-        } else if (tokct > 2) {
-          printf("\n\texit: syntax error -- too many arguments");
+      bin_builtin bi;
+      if ((bi = bt_get(BI_TABLE, f_tokens[0])) != NULL) {
+        (*bi) (f_tokct, f_tokens);
+      } else if (strcmp(argv[0], "splash") == 0) {
+        if (f_tokct > 1) {
+          fprintf(stderr, "\n\t{wsh @ splash} -- builtin does not take any arguments");
+        }
+
+        if (splash() != 0) {
+          fprintf(stderr, "\n\t{wsh @ execute} -- splash failed to print");
           continue;
         }
-        cleanup_job_list(jobs_list);
-        exit(ec);  // Exit Command
-      } else if (strcmp(tokens[0], "clear") == 0) {
-        bin_clear(tokct, tokens);
-      } else if (strcmp(tokens[0], "cd") == 0) {
-        bin_cd(tokct, tokens);   // CD
-      } else if (strcmp(tokens[0], "ln") == 0) {
-        bin_ln(tokct, tokens);   // Link
-      } else if (strcmp(tokens[0], "rm") == 0) {
-        bin_rm(tokct, tokens);   // Remove
-      } else if (strcmp(tokens[0], "jobs") == 0) {
-        bin_jobs(tokct, tokens); // Jobs
-      } else if (strcmp(tokens[0], "fg") == 0) {
-        bin_fg(tokct, tokens);   // fg
-      } else if (strcmp(tokens[0], "bg") == 0) {
-        bin_bg(tokct, tokens);   // bg
+      } else if (strcmp(argv[0], "alias") == 0) {
+        process_alias(tokct, tokens, 0);
       } else {
-        if (strcmp(ppstr_final(tokens), "&") == 0) {
-          execute(tokens, argv, 1);
+        if (strcmp(ppstr_final(f_tokens), "&") == 0) {
+          execute(f_tokens, argv, 1);
         } else {
-          execute(tokens, argv, 0);
+          execute(f_tokens, argv, 0);
         }
       }
     }
