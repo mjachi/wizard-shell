@@ -1,2 +1,0 @@
-/usr/bin/whoami >> redirect.txt
-/bin/cat redirect.txt

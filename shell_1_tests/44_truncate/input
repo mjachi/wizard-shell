@@ -1,3 +1,0 @@
-/bin/echo should not show in output > redirect.txt
-/bin/echo cs0330 green shell > redirect.txt
-/bin/cat redirect.txt

@@ -144,7 +144,7 @@ char **prep (char **tokens) {
  * - argv: raw input tokens
  */
 
-int process_alias(int tok_count, char **tokens, int supress_output) {
+int process_alias(int tok_count, char **tokens, int suppress_output) {
   if (tok_count < 4) {
     fprintf(stderr, "\n\t{wsh @ process_alias} -- needs a definition");
     return -1;
@@ -194,12 +194,15 @@ int process_alias(int tok_count, char **tokens, int supress_output) {
     return -1;
   }
   
-  if (!supress_output) {
+  if (!suppress_output) {
     printf("\nAdded alias %s with definition: \n", name);
     print_arr(tok_def);
   }
   return 0;
 }
+
+
+
 
 
 /**
@@ -213,10 +216,59 @@ int process_alias(int tok_count, char **tokens, int supress_output) {
 
 int wsh_rc_init() {
 
+  size_t home_len = strlen(HOME_PATH);
+  char hpc[home_len];
+  strcpy(hpc, HOME_PATH);
+  char config_path[home_len];
 
-  //if (access(NULL, R_OK)){
-    //FILE *config_file = fopen();
-  //}
+  
+  FILE *config_file = NULL;
+
+  printf("%s", hpc);
+
+  strcat(hpc, ".wshrc");
+
+  if (access(".wshrc", R_OK)) { // Look in cwd
+    config_file = fopen(".wshrc", "r");
+  } else if (access(hpc, R_OK)){ // Look in ~
+    config_file = fopen(hpc, "r");
+  } else if (access(config_path, R_OK)) { // Look in ~/.config 
+    config_file = fopen(config_path, "r");
+  } else if (access("/.wshrc", R_OK)) { // Look in /
+    config_file = fopen("/.wshrc", "r");
+  } else {
+    return -1;
+  }
+  
+  ssize_t length;
+  char *buf = NULL;
+  size_t buf_len = 128;
+
+  while ((length = getline(&buf, &buf_len, config_file)) >= 0) {
+    if (read == 0) {
+      continue;
+    }
+
+    char **tkns = wsh_tokenize(buf);
+    int tokct = ppstrlen(tkns);
+
+    if (!tkns || tokct < 3) {
+      fprintf(stderr, "{wsh @ rc init} -- failed to tokenize properly");
+      return -1;
+    }
+
+    if (strcmp(tkns[0], "alias")) {
+      process_alias(tokct, tkns, 0);
+    } else if (strcmp(tkns[0], "home")) {
+      DIR* dir = opendir(tkns[2]);
+      if (dir) {
+        HOME_PATH = tkns[2];
+      } else {
+        fprintf(stderr, "{wsh @ rc init} -- failed to find the proposed HOME path reset");
+      }
+    }
+
+  }
 
   return 0;
 }

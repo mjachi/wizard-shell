@@ -1,2 +1,0 @@
-ln to_link.txt linked.txt
-/bin/cat linked.txt
