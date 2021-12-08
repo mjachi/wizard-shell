@@ -216,11 +216,14 @@ int process_alias(int tok_count, char **tokens, int suppress_output) {
 
 int wsh_rc_init() {
 
+  printf("here");
+
   size_t home_len = strlen(HOME_PATH);
   char hpc[home_len];
   strcpy(hpc, HOME_PATH);
   char config_path[home_len];
 
+  printf("asdfasdf");
   
   FILE *config_file = NULL;
 
@@ -229,12 +232,16 @@ int wsh_rc_init() {
   strcat(hpc, ".wshrc");
 
   if (access(".wshrc", R_OK)) { // Look in cwd
+    printf("foudn in cwd");
     config_file = fopen(".wshrc", "r");
   } else if (access(hpc, R_OK)){ // Look in ~
+    printf("foudn in home");
     config_file = fopen(hpc, "r");
   } else if (access(config_path, R_OK)) { // Look in ~/.config 
+    printf("foudn in config path");
     config_file = fopen(config_path, "r");
   } else if (access("/.wshrc", R_OK)) { // Look in /
+    printf("foudn in /");
     config_file = fopen("/.wshrc", "r");
   } else {
     return -1;
@@ -245,10 +252,6 @@ int wsh_rc_init() {
   size_t buf_len = 128;
 
   while ((length = getline(&buf, &buf_len, config_file)) >= 0) {
-    if (read == 0) {
-      continue;
-    }
-
     char **tkns = wsh_tokenize(buf);
     int tokct = ppstrlen(tkns);
 
@@ -889,7 +892,7 @@ int wsh_main(int argc, char **argv) {
    */
 
   // TODO -- .wshrc configuration
-  wsh_rc_init();
+  //wsh_rc_init();
   
   /** 
    * Headless execution... much faster since
