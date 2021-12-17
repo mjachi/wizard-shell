@@ -30,10 +30,19 @@ int bin_fg(int argc, char **argv) {
 
     int jid = atoi(argv[1] + 1);
     pid_t pid = get_job_pid(jobs_list, jid);
+
+#ifdef PROMPT
     if (pid < 0) {
         printf("\n\tjob not found\n");
         return -1;
     }
+#else
+    if (pid < 0) {
+        printf("job not found\n");
+        return -1;
+    }
+    
+#endif
 
     tcsetpgrp(STDIN_FILENO, pid);
     if (kill(-1 * pid, SIGCONT) < 0) {
@@ -48,14 +57,14 @@ int bin_fg(int argc, char **argv) {
         }
         if (WIFSIGNALED(wstatus)) {
             remove_job_jid(jobs_list, jid);
-            if (!printf("\n[%d] (%d) terminated by signal %d\n", jcount,
+            if (!printf("[%d] (%d) terminated by signal %d\n", jcount,
                         wret, WTERMSIG(wstatus))) {
                 fprintf(stderr,"\n\t{wsh @ bin_fg} -- error writing to output\n");
             }
         }
         if (WIFSTOPPED(wstatus)) {
             update_job_jid(jobs_list, jid, STOPPED);
-            if (!printf("\n\t[%d] (%d) suspended by signal %d\n", jcount,
+            if (!printf("[%d] (%d) suspended by signal %d\n", jcount,
                         wret, WSTOPSIG(wstatus))) {
                 fprintf(stderr,"\n\t{wsh @ bin_fg} -- error writing to output\n");
             }
@@ -91,15 +100,27 @@ int bin_bg(int argc, char **argv) {
 
     int jid = atoi(argv[1] + 1);
     pid_t pid = get_job_pid(jobs_list, jid);
+
+#ifdef PROMPT
     if (pid < 0) {
         printf("\n\t{wsh @ bg} -- job not found with code %d\n", pid);
         return -1;
     }
-
     if (kill(-1 * pid, SIGCONT) < 0) {
         printf("\n\t{wsh @ bg} -- error in continuing the job");
         return -1;
     }
+#else
+    if (pid < 0) {
+        printf("job not found\n");
+        return -1;
+    }
+    if (kill(-1 * pid, SIGCONT) < 0) {
+        printf("asdf asdf\n");
+        return -1;
+    }
+#endif
+
 
   return 0;
 }
@@ -120,12 +141,12 @@ int bin_jobs(int argc, char **argv) {
         printf("\n\tjobs: syntax error -- too many arguments; doesn't take any\n");
         return -1;
     }
-
+#ifdef PROMPT
     if (jcount == 0) {
       printf("\n\tNo jobs to report");
       return 0;
     }
-
+#endif
     jobs(jobs_list);
     return 0;
 }

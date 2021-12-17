@@ -38,5 +38,6 @@ extern job_list_t *jobs_list;
 
 
 int wsh_main(int argc, char **argv);
+int other_repl();
 
 #endif

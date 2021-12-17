@@ -11,6 +11,8 @@
 #define PS_BFS 512
 #define TOK_DELIM " \t\n"
 
+#define BFS 1024
+#define TOKS 512
 
 extern int errno;
 int jcount = 0;
@@ -144,7 +146,7 @@ char **prep (char **tokens) {
  * - argv: raw input tokens
  */
 
-int process_alias(int tok_count, char **tokens, int supress_output) {
+int process_alias(int tok_count, char **tokens, int suppress_output) {
   if (tok_count < 4) {
     fprintf(stderr, "\n\t{wsh @ process_alias} -- needs a definition");
     return -1;
@@ -194,12 +196,15 @@ int process_alias(int tok_count, char **tokens, int supress_output) {
     return -1;
   }
   
-  if (!supress_output) {
+  if (!suppress_output) {
     printf("\nAdded alias %s with definition: \n", name);
     print_arr(tok_def);
   }
   return 0;
 }
+
+
+
 
 
 /**
@@ -213,10 +218,58 @@ int process_alias(int tok_count, char **tokens, int supress_output) {
 
 int wsh_rc_init() {
 
+  printf("here");
 
-  //if (access(NULL, R_OK)){
-    //FILE *config_file = fopen();
-  //}
+  size_t home_len = strlen(HOME_PATH);
+  char hpc[home_len];
+  strcpy(hpc, HOME_PATH);
+  char config_path[home_len];
+
+  printf("asdfasdf");
+  
+  FILE *config_file = NULL;
+
+  printf("%s", hpc);
+
+  strcat(hpc, ".wshrc");
+
+  if (access(".wshrc", R_OK)) { // Look in cwd
+    config_file = fopen(".wshrc", "r");
+  } else if (access(hpc, R_OK)){ // Look in ~
+    config_file = fopen(hpc, "r");
+  } else if (access(config_path, R_OK)) { // Look in ~/.config 
+    config_file = fopen(config_path, "r");
+  } else if (access("/.wshrc", R_OK)) { // Look in /
+    config_file = fopen("/.wshrc", "r");
+  } else {
+    return -1;
+  }
+  
+  ssize_t length;
+  char *buf = NULL;
+  size_t buf_len = 128;
+
+  while ((length = getline(&buf, &buf_len, config_file)) >= 0) {
+    char **tkns = wsh_tokenize(buf);
+    int tokct = ppstrlen(tkns);
+
+    if (!tkns || tokct < 3) {
+      fprintf(stderr, "{wsh @ rc init} -- failed to tokenize properly");
+      return -1;
+    }
+
+    if (strcmp(tkns[0], "alias")) {
+      process_alias(tokct, tkns, 0);
+    } else if (strcmp(tkns[0], "home")) {
+      DIR* dir = opendir(tkns[2]);
+      if (dir) {
+        HOME_PATH = tkns[2];
+      } else {
+        fprintf(stderr, "{wsh @ rc init} -- failed to find the proposed HOME path reset");
+      }
+    }
+
+  }
 
   return 0;
 }
@@ -484,16 +537,20 @@ void execute(char **tokens, char **argv,
         // Executes the command in the child process
         
         char *fnr = first_nonredirect(tokens, "\0");
+#ifdef PROMPT
         execvp(fnr, argv);
-
         perror("\n\t{wsh @ execvp} ");
+#else
+        execv(fnr, argv);
+        perror("execv");
+#endif
         exit(1);
     }
 
     if (is_background) {
 
         add_job(jobs_list, ++jcount, pid, RUNNING, first_nonredirect(tokens, "\0"));
-        if (!printf("\n[%d] (%d)\n", jcount, pid)) {
+        if (!printf("[%d] (%d)\n", jcount, pid)) {
             fprintf(stderr,"\n\t{wsh @ execute} -- error writing to output\n");
         }
 
@@ -505,14 +562,14 @@ void execute(char **tokens, char **argv,
             if (WIFSIGNALED(wstatus)) {
                 // terminated by a signal
                 jcount = jcount + 1;
-                if (!printf("\n[%d] (%d) terminated by signal %d\n",
+                if (!printf("[%d] (%d) terminated by signal %d\n",
                             jcount, wret, WTERMSIG(wstatus))) {
                     fprintf(stderr,"\n\t{wsh @ execute} -- error writing to output\n");
                 }
             }
             if (WIFSTOPPED(wstatus)) {
                 add_job(jobs_list, ++jcount, pid, STOPPED, first_nonredirect(tokens, "\0"));
-                if (!printf("\n[%d] (%d) suspended by signal %d\n",
+                if (!printf("[%d] (%d) suspended by signal %d\n",
                             jcount, wret, WSTOPSIG(wstatus))) {
                     fprintf(stderr,"\n\t{wsh @ execute} -- error writing to output\n");
                 }
@@ -558,7 +615,6 @@ int splash() {
   }
 
   printf("wsh (:wizard: shell) on %s running %s, \n\n", unameData.nodename, unameData.release);
-  
   return 0;
 }
 
@@ -837,7 +893,7 @@ int wsh_main(int argc, char **argv) {
    */
 
   // TODO -- .wshrc configuration
-  wsh_rc_init();
+  //wsh_rc_init();
   
   /** 
    * Headless execution... much faster since
@@ -1020,7 +1076,6 @@ int wsh_main(int argc, char **argv) {
 
   for (;;) { // beginning of this = new command
     
-    // TODO -- add CWD files to completions
     char cwd_path[PATH_MAX];
     cwd_path[0] = 0;
 
@@ -1044,7 +1099,6 @@ int wsh_main(int argc, char **argv) {
       }
     }
     
-
     if (printf("%s",bang) < 0) { // scuffed try catch for when we reach the bottom of the screen.
       fprintf(stderr, "\n\t{wsh @ REPL} -- unable to write to screen");
       return -1;
@@ -1056,7 +1110,6 @@ int wsh_main(int argc, char **argv) {
     }
 
     h->curr = h->first;
-
     char *buffer = get_line(h, completions);
 
     // tokenize 
@@ -1116,7 +1169,7 @@ int wsh_main(int argc, char **argv) {
       if (WIFEXITED(wstatus)) {
         // terminated normally
         remove_job_pid(jobs_list, wret);
-        if (printf( "\n[%d] (%d) terminated with exit status %d\n", wjid,
+        if (printf( "[%d] (%d) terminated with exit status %d\n", wjid,
                     wret, WEXITSTATUS(wstatus)) < 0) {
             fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
             exit(-1);
@@ -1125,7 +1178,7 @@ int wsh_main(int argc, char **argv) {
         if (WIFSIGNALED(wstatus)) {
           // terminated by signal
           remove_job_pid(jobs_list, wret);
-          if (printf("\n[%d] (%d) terminated by signal %d\n", wjid,
+          if (printf("[%d] (%d) terminated by signal %d\n", wjid,
                   wret, WTERMSIG(wstatus)) < 0) {
             fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
             exit(-1);
@@ -1135,7 +1188,7 @@ int wsh_main(int argc, char **argv) {
         if (WIFSTOPPED(wstatus)) {
           // stopped
           update_job_pid(jobs_list, wret, STOPPED);
-          if (printf("\n[%d] (%d) suspended by signal %d\n", wjid,
+          if (printf("[%d] (%d) suspended by signal %d\n", wjid,
                         wret, WSTOPSIG(wstatus)) < 0) {
            
             fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
@@ -1145,7 +1198,7 @@ int wsh_main(int argc, char **argv) {
         if (WIFCONTINUED(wstatus)) {
               
           update_job_pid(jobs_list, wret, RUNNING);
-          if (printf("\n[%d] (%d) resumed\n", wjid, wret) < 0) {
+          if (printf("[%d] (%d) resumed\n", wjid, wret) < 0) {
             fprintf(stderr, "{wsh @ REPL -- bg's} -- could not write out\n");
             exit(-1);
           }
@@ -1170,5 +1223,118 @@ int wsh_main(int argc, char **argv) {
 
   cleanup_job_list(jobs_list);
   return 0;
-  } 
+} 
+
+
+/**
+ * Purely for the purposes of running on testing scripts written by/ from the course
+ * 
+ * Executed only when compiled without -DPROMPT/ whenever PROMPT is not defined
+ */
+int other_repl() {
+  char buf[BFS];
+  ssize_t count;
+
+  memset(buf, '\0', BFS);
+
+  jobs_list = init_job_list();
+  jcount = 0;
+
+  signal(SIGINT, SIG_IGN);
+  signal(SIGTSTP, SIG_IGN);
+  signal(SIGTTOU, SIG_IGN);
+
+  BI_TABLE = bt_new_bt(50);
+  if (BI_TABLE == NULL) {
+    fprintf(stderr, "{wsh @ init} -- built-in's table failed to initialize; this\
+    may be indicative of a larger error elsewhere. exiting");
+    exit(EXIT_FAILURE);
+  }
+
+  bt_set(BI_TABLE, "clear", &bin_clear);
+  bt_set(BI_TABLE, "cd", &bin_cd);
+  bt_set(BI_TABLE, "ln", &bin_ln);
+  bt_set(BI_TABLE, "jobs", &bin_jobs);
+  bt_set(BI_TABLE, "fg", &bin_fg);
+  bt_set(BI_TABLE, "bg", &bin_bg);
+  bt_set(BI_TABLE, "exit", &bin_exit);
+
+  while ((count = read(0, buf, BFS)) != 0) {
+    if (count == -1) {
+      // An Error Occured in Reading
+      fprintf(stderr, "Failed to read in the line\n");
+    } else {
+
+      char **tokens = wsh_tokenize(buf);
+      char **argv = prep(tokens);
+
+
+      if (!tokens){
+        // if error while parsing
+        fprintf(stderr, "\n\t{wsh @ REPL -- parsing} -- ran into generic error parsing. skipping");
+        continue;
+      }
+      if (!argv) {
+        fprintf(stderr, "\n\t{wsh @ REPL -- prepping} -- ran into generic error prepping. skipping");
+        continue;
+      }
+
+      int tokct = ppstrlen(tokens);
+      int argc = ppstrlen(argv);
+
+      if (tokct > 0) {
+        bin_builtin bi;
+        if ((bi = bt_get(BI_TABLE, tokens[0])) != NULL) {
+          (*bi) (tokct, tokens);
+        } else {
+          if (strcmp(ppstr_final(tokens), "&") == 0) {
+            execute(tokens, argv, 1);
+          } else {
+            execute(tokens, argv, 0);
+          }
+        }
+      }
+
+      int wret, wstatus;
+      while ((wret = waitpid(-1, &wstatus,
+                           WNOHANG | WUNTRACED | WCONTINUED)) > 0) {
+        int wjid = get_job_jid(jobs_list, wret);
+        if (WIFEXITED(wstatus)) {
+          remove_job_pid(jobs_list, wret);
+          if (fprintf(stdout,
+                    "[%d] (%d) terminated with exit status %d\n", wjid,
+                    wret, WEXITSTATUS(wstatus)) < 0) {
+            fprintf(stderr, "Could not write out\n");
+          }
+        }
+        if (WIFSIGNALED(wstatus)) {
+          remove_job_pid(jobs_list, wret);
+          if (fprintf(stdout, "[%d] (%d) terminated by signal %d\n", wjid,
+                      wret, WTERMSIG(wstatus)) < 0) {
+            fprintf(stderr, "Could not write out\n");
+          }
+        }
+        if (WIFSTOPPED(wstatus)) {
+          update_job_pid(jobs_list, wret, STOPPED);
+          if (fprintf(stdout, "[%d] (%d) suspended by signal %d\n", wjid,
+                      wret, WSTOPSIG(wstatus)) < 0) {
+            fprintf(stderr, "Could not write out\n");
+          }
+        }
+        if (WIFCONTINUED(wstatus)) {
+          update_job_pid(jobs_list, wret, RUNNING);
+          if (fprintf(stdout, "[%d] (%d) resumed\n", wjid, wret) < 0) {
+            fprintf(stderr, "Could not write out\n");
+          }
+        }
+      }
+      memset(buf, '\0', BFS);
+    }
+  }
+  cleanup_job_list(jobs_list);
+  return 0;
+  
+}
+
+
 
