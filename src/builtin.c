@@ -1,4 +1,3 @@
-
 #include "builtin.h"
 #include "global.h"
 #include <errno.h>
@@ -31,18 +30,10 @@ int bin_fg(int argc, char **argv) {
     int jid = atoi(argv[1] + 1);
     pid_t pid = get_job_pid(jobs_list, jid);
 
-#ifdef PROMPT
     if (pid < 0) {
         printf("\n\tjob not found\n");
         return -1;
     }
-#else
-    if (pid < 0) {
-        printf("job not found\n");
-        return -1;
-    }
-    
-#endif
 
     tcsetpgrp(STDIN_FILENO, pid);
     if (kill(-1 * pid, SIGCONT) < 0) {
@@ -110,17 +101,6 @@ int bin_bg(int argc, char **argv) {
         printf("\n\t{wsh @ bg} -- error in continuing the job");
         return -1;
     }
-#else
-    if (pid < 0) {
-        printf("job not found\n");
-        return -1;
-    }
-    if (kill(-1 * pid, SIGCONT) < 0) {
-        printf("asdf asdf\n");
-        return -1;
-    }
-#endif
-
 
   return 0;
 }
@@ -128,7 +108,7 @@ int bin_bg(int argc, char **argv) {
 /**
  * Executes the jobs command on the given tokens
  *
- * Parameters: 
+ * Parameters:
  * - argc: token count in argv
  * - argv: the tokenized inputs to the command line.
  *
@@ -177,13 +157,13 @@ int bin_cd(int argc, char **argv){
         }
         argv[1] = home;
     }
-    
+
     if (chdir(argv[1]) < 0) {
         char *error = strerror(errno);
         printf("\n\t cd: %s", error);
         return -1;
     }
-    return 0; 
+    return 0;
 }
 
 /*
@@ -245,7 +225,7 @@ int bin_rm(int argc, char **argv) {
 /**
  *
  * Executes the clear command on the given tokesn
- * 
+ *
  * Parameters:
  * - argc: token count in argv
  * - argv: the tokenized input
@@ -276,6 +256,7 @@ int bin_clear(int argc, char **argv) {
  * - argv: the tokenized input
  *
  * Exits before it returns anything.
+ *
  */
 
 int bin_exit(int argc, char **argv) {
@@ -291,7 +272,7 @@ int bin_exit(int argc, char **argv) {
         fprintf(stderr, "\n\texit: syntax error -- too many arguments");
         return -1;
     }
-    
+
     cleanup_job_list(jobs_list);
     exit(ec);
 }
