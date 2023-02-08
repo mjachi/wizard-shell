@@ -23,18 +23,30 @@ int pop_back(history* h){
  * Public functions, so to speak, follow
  */
 
-// QoL for telling if history is blank
+/**
+ * h_isEmpty
+ * 
+ * Takes a history struct; if it is empty, returns 0 (true) otherwise 1
+*/
 int h_isEmpty(history* h) {
   return h->count == 0;
 }
 
-// QoL for returning length of history
+/**
+ * h_length
+ * 
+ * Returns history length
+*/
 int h_length(history* h) {
   return h->count;
 }
 
 
-// just tags onto the front
+/**
+ * h_push
+ * 
+ * Pushes onto the top of the history stack
+*/
 int h_push(history* h, char* command) {
   if (!h) { // null history
     return -1;

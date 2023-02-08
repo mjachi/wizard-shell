@@ -40,8 +40,6 @@ char *PATH_VAR = NULL;
  *   and shortcuts)
  *
  * Returns char**, an array with the tokens on ' '
- *
- *
  */
 
 char **wsh_tokenize(char *line) {

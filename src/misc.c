@@ -14,9 +14,9 @@
 extern int errno;
 
 /**
- * Contains a handful of random things... not much more than that
+ * Contains a handful of random things
  * The code in here drives a lot of the quality of life features
- * of wsh e.g. implementation for arithmetic evaluation in-line
+ * of wsh
  */
 
 /**
@@ -92,7 +92,7 @@ int notalpha(char *str) {
  *
  * Returns 1 when the input string is entirely lowercase; 0 otherwise.
  *
- * Presently not well-defined for non-alphabetical strings;
+ * Not well-defined for non-alphabetical strings;
  * will error at `tolower()`
  */
 int str_islower(char *str) {

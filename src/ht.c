@@ -41,21 +41,9 @@ typedef struct alias_table {
   size_t count;
 } alias_table;
 
-// I assume that there is some sort of templating feature out there
-// a la C++ that I do not know about in  C99; hence, since I wanted 
-// to deal with specific types and not worry about casts, I required 
-// 3 "reimplementations" of essentially the same code
-
 /**
- * A few "side" functions 
+ * This is C23 stdlib but not C99
  */
-
-// C2(3) is to have this nice function once finalized,
-// but we're using C99.
-//
-// This is a "it" according to text 
-// passed to my desktop over many a wire
-// from many a server/ modem... you get the idea.
 char *strdup(const char *str)
 {
   char *str__;
@@ -73,8 +61,6 @@ char *strdup(const char *str)
 }
 
 // FNV simple hashing function implementation; 
-// I know little of this sort of work, so this is ripped 
-// from the internet.
 uint64_t ht_hash(const char* key){
 	uint64_t hash = 14695981039346656037UL;
 	for (const char* p = key; *p; p++) {
@@ -291,7 +277,6 @@ int bt_set_internal(b_node* bns, int capacity, size_t* plength, const char *name
  * size; naturally factor > 1, but is hard-coded to 1.5 below to try 
  * to conserve. Notice exponential behavior if an extreme number of 
  * K/V pairs are added.
- *
  */
 void bt_blowup(builtins_table* bt, double factor){
 
@@ -518,7 +503,6 @@ alias_table* at_new_at(int size) {
  * Assertions are there simply because there 
  * should be never be an attempt to insert something
  * that is currently null.
- *
  */
 int at_delete_at(alias_table* at){
 

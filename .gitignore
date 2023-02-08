@@ -3,5 +3,5 @@ shell_1_tests/
 obj/
 objd/
 *.o
-
 bin/
+.vscode/

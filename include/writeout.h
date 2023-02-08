@@ -6,10 +6,7 @@
 #include <unistd.h>
 
 /**
- * Header for doing all my I/O without curses
- *
- * No longer do I need to have issues with REPL based
- * programs e.g. vim and julia!
+ * Header for all I/O functionality
  */
 
 void back_up_buffer(int n);
@@ -17,6 +14,6 @@ void clear_line_buffer(int len, int p);
 int getch(void);
 void whitespace(int n);
 
-int print_arr(char** out);
+int print_arr(char **out);
 
 #endif
