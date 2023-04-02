@@ -10,41 +10,40 @@
  *
  */
 
-
 /**
- *
  * Creates and returns a freshly initialized TrieNode
  *
- * Returns a pointer to the new struct, given it is not null; in the case that it is,
- * this is taken as indicative of an error with malloc, so wsh exits cleanly.
+ * Parameters:
+ * - void
  *
+ * Returns a pointer to the new struct, given it is not null; in the case that
+ * it is, this is taken as indicative of an error with malloc, so wsh exits
+ * cleanly.
  */
-
 TrieNode *tn_getNode(void) {
-    TrieNode *pNode = NULL;
+  TrieNode *pNode = NULL;
 
-    pNode = malloc(sizeof(struct TrieNode));
+  pNode = malloc(sizeof(struct TrieNode));
 
-    if (pNode){
-        int i;
+  if (pNode) {
+    int i;
 
-        pNode->isLeaf = 0;
+    pNode->isLeaf = 0;
 
-        for (i = 0; i < ALPHABET_S; i++)
-            pNode->children[i] = NULL;
-    } else {
-      // if pNode is null, something happened with malloc
-      fprintf(stderr, "{wsh @ tn_getNode} -- Error on malloc;\
+    for (i = 0; i < ALPHABET_S; i++)
+      pNode->children[i] = NULL;
+  } else {
+    // if pNode is null, something happened with malloc
+    fprintf(stderr, "{wsh @ tn_getNode} -- Error on malloc;\
           was given a null pointer; exiting...");
-      exit(1);
-    }
-    pNode->count = 0;
+    exit(1);
+  }
+  pNode->count = 0;
 
-    return pNode;
+  return pNode;
 }
 
 /**
- *
  * Inserts a key into the trie node. More specifically, if the key
  * is not already present, then it is inserted; otherwise, marks the
  * corresponding node
@@ -54,29 +53,27 @@ TrieNode *tn_getNode(void) {
  * - key: simply, the key to be inserted
  *
  * Nothing returned
- *
  */
 
-void tn_insert(TrieNode *root, const char *key){
-    int length = strlen(key), level, index;
+void tn_insert(TrieNode *root, const char *key) {
+  int length = strlen(key), level, index;
 
-    TrieNode *pCrawl = root;
+  TrieNode *pCrawl = root;
 
-    for (level = 0; level < length; level++) {
-        index = CHAR_TO_INDEX(key[level]);
-        if (!pCrawl->children[index]){
-            pCrawl->children[index] = tn_getNode();
-            pCrawl->count++;
-        }
-        pCrawl = pCrawl->children[index];
+  for (level = 0; level < length; level++) {
+    index = CHAR_TO_INDEX(key[level]);
+    if (!pCrawl->children[index]) {
+      pCrawl->children[index] = tn_getNode();
+      pCrawl->count++;
     }
+    pCrawl = pCrawl->children[index];
+  }
 
-    // mark last node as leaf
-    pCrawl->isLeaf = 1;
+  // mark last node as leaf
+  pCrawl->isLeaf = 1;
 }
 
 /**
- *
  * Traverses the Trie beginning at root to search for the prefix; if
  * the key is complete in the trie, then we return 1 equiv true; false
  * otherwise
@@ -87,32 +84,37 @@ void tn_insert(TrieNode *root, const char *key){
  *
  * Returns 1 if the key is found and the final node traversed to is a leaf;
  * otherwise, return 0.
- *
  */
+int tn_search(struct TrieNode *root, const char *key) {
+  int length = strlen(key), i, index;
+  struct TrieNode *pCrawl = root;
 
-int tn_search(struct TrieNode *root, const char *key){
-    int length = strlen(key), i, index;
-    struct TrieNode *pCrawl = root;
+  for (i = 0; i < length; i++) {
+    index = CHAR_TO_INDEX(key[i]);
 
-    for (i = 0; i < length; i++) {
-        index = CHAR_TO_INDEX(key[i]);
-
-        if (!pCrawl->children[index]){
-            return 0;
-        }
-
-        pCrawl = pCrawl->children[index];
+    if (!pCrawl->children[index]) {
+      return 0;
     }
 
-    return (pCrawl->isLeaf);
+    pCrawl = pCrawl->children[index];
+  }
+
+  return (pCrawl->isLeaf);
 }
 
-// Returns 1 if root has no children, else 0
-int isEmpty(TrieNode* root){
-    for (int i = 0; i < ALPHABET_S; i++)
-        if (root->children[i])
-            return 0;
-    return 1;
+/**
+ * Determines if the trie node has no children.
+ *
+ * Parameters:
+ * - root: the TrieNode to begin traversal with
+ *
+ * Returns 1 if root is empty; 0 otherwise.
+ */
+int isEmpty(TrieNode *root) {
+  for (int i = 0; i < ALPHABET_S; i++)
+    if (root->children[i])
+      return 0;
+  return 1;
 }
 
 /**
@@ -125,40 +127,36 @@ int isEmpty(TrieNode* root){
  * - depth: current depth in the trie, used to check whether or not
  *   the current node is a leaf in the trie, in which case it should be free'd
  *
- * Returns a TrieNode: at each level of recursion, this is whatever should replace
- * whatever may have been at that level in particular.
- *
+ * Returns a TrieNode: at each level of recursion, this is whatever should
+ * replace whatever may have been at that level in particular.
  */
+TrieNode *tn_remove(TrieNode *root, char *key, int depth) {
+  if (!root) {
+    return NULL;
+  }
 
-TrieNode* tn_remove(TrieNode* root, char *key, int depth){
-    if (!root){
-      return NULL;
+  if (depth == strlen(key)) {
+    if (root->isLeaf) {
+      root->isLeaf = 0;
     }
-
-    if (depth == strlen(key)) {
-        if (root->isLeaf) {
-            root->isLeaf = 0;
-        }
-        if (isEmpty(root)) {
-            free(root);
-            root = NULL;
-        }
-        return root;
+    if (isEmpty(root)) {
+      free(root);
+      root = NULL;
     }
-    int index = key[depth] - 'a';
-    root->children[index] =
-          tn_remove(root->children[index], key, depth + 1);
-
-    if (isEmpty(root) && root->isLeaf == 0) {
-        free (root);
-        return NULL;
-    }
-
     return root;
+  }
+  int index = key[depth] - 'a';
+  root->children[index] = tn_remove(root->children[index], key, depth + 1);
+
+  if (isEmpty(root) && root->isLeaf == 0) {
+    free(root);
+    return NULL;
+  }
+
+  return root;
 }
 
 /**
- *
  * Simply indicates whether or not the passed node is at the bottom; this is the
  * case when the passed node has any children.
  *
@@ -167,16 +165,15 @@ TrieNode* tn_remove(TrieNode* root, char *key, int depth){
  *
  * Returns 0 if root has no children; otherwise, returns 1 (for all i within the
  * alphabet, root's child i must be null)
- *
  */
-
-int isLastNode (TrieNode* root) {
-    for (int i = 0; i < ALPHABET_S; i++) if (root->children[i]) return 0;
-    return 1;
+int isLastNode(TrieNode *root) {
+  for (int i = 0; i < ALPHABET_S; i++)
+    if (root->children[i])
+      return 0;
+  return 1;
 }
 
 /**
- *
  * Traverses the trie in search of, numerically, the first completion
  * to be found.
  *
@@ -185,17 +182,17 @@ int isLastNode (TrieNode* root) {
  * - prefix: the trie prefix to traverse by
  *
  * Returns the first suggestion found in the trie as a char array
- *
  */
-
-char *suggestionsRec (TrieNode *root, char *prefix) {
-  if (root->isLeaf) return prefix;
-  if (isLastNode(root)) return prefix;
+char *suggestionsRec(TrieNode *root, char *prefix) {
+  if (root->isLeaf)
+    return prefix;
+  if (isLastNode(root))
+    return prefix;
 
   for (int i = 0; i < ALPHABET_S; i++) {
     if (root->children[i]) {
       char str[2];
-      str[0] = 97+i;
+      str[0] = 97 + i;
       str[1] = '\0';
 
       return suggestionsRec(root->children[i], strcat(prefix, str));
@@ -204,9 +201,7 @@ char *suggestionsRec (TrieNode *root, char *prefix) {
   return prefix;
 }
 
-
 /**
- *
  * Given a prefix, completionOf returns the first completion found in
  * the trie as a char array.
  *
@@ -216,10 +211,8 @@ char *suggestionsRec (TrieNode *root, char *prefix) {
  * - prefix: the trie prefix to complete
  *
  * Returns a char array containing the prescribed completion
- *
  */
-
-char *completionOf (TrieNode *root, char *prefix) {
+char *completionOf(TrieNode *root, char *prefix) {
 
   TrieNode *pCrawl = root;
   int len = strlen(prefix);
@@ -244,4 +237,3 @@ char *completionOf (TrieNode *root, char *prefix) {
 
   return prefix;
 }
-

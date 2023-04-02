@@ -13,9 +13,7 @@ extern int errno;
  * - argv: the tokenized inputs to the command line
  *
  * Returns int based on execution success or failure.
- *
  */
-
 int bin_fg(int argc, char **argv) {
   if (argc != 2) {
     printf("\n\tfg: syntax error -- requires exactly one argument");
@@ -74,9 +72,7 @@ int bin_fg(int argc, char **argv) {
  * - argv: the tokenized inputs to the command line
  *
  * Returns int based on execution success or failure
- *
  */
-
 int bin_bg(int argc, char **argv) {
   // Checks that there's at least 1 arguments after the ln string
   if (argc != 2) {
@@ -112,9 +108,7 @@ int bin_bg(int argc, char **argv) {
  * - argv: the tokenized inputs to the command line.
  *
  * Returns: int based on execution success or failure
- *
  */
-
 int bin_jobs(int argc, char **argv) {
   if (argc != 1) {
     printf("\n\tjobs: syntax error -- too many arguments; doesn't take any\n");
@@ -139,7 +133,6 @@ int bin_jobs(int argc, char **argv) {
  *
  * Returns: int based on execution success or failure
  */
-
 int bin_cd(int argc, char **argv) {
   if (argc > 2) {
     printf("\n\tcd: syntax error -- too many arguments");
@@ -166,11 +159,11 @@ int bin_cd(int argc, char **argv) {
  * Executes the ln command on the given tokens
  *
  * Parameters:
- *  - tokens: the tokenized inputs to the command line
+ *  - argc: the count of the tokens in argv
+ *  - argv: the tokenized inputs to the command line
  *
  * Returns: Nothing
  */
-
 int bin_ln(int argc, char **argv) {
   // Checks that there are at least 2 arguments after the ln string
   if (argc < 3) {
@@ -196,7 +189,6 @@ int bin_ln(int argc, char **argv) {
  *
  * Returns: int based on execution success or failure
  */
-
 int bin_rm(int argc, char **argv) {
   // Checks that there's at least 1 arguments after the ln string
   if (argc < 2) {
@@ -218,17 +210,15 @@ int bin_rm(int argc, char **argv) {
 
 /**
  *
- * Executes the clear command on the given tokesn
+ * Executes the clear command on the given tokesn, by printing
+ * the ANSI clear command.
  *
  * Parameters:
  * - argc: token count in argv
  * - argv: the tokenized input
  *
- * Returns an int based on the success/ failure of printing
- * the ANSI clear string provided.
- *
+ * Returns an int based on execution success/ failure.
  */
-
 int bin_clear(int argc, char **argv) {
   if (argc > 1) {
     printf("\n\tclear: syntax error -- too many arguments... takes none");
@@ -242,7 +232,6 @@ int bin_clear(int argc, char **argv) {
 }
 
 /**
- *
  * Executes the exit command on the given tokens
  *
  * Parameters:
@@ -250,9 +239,7 @@ int bin_clear(int argc, char **argv) {
  * - argv: the tokenized input
  *
  * Exits before it returns anything.
- *
  */
-
 int bin_exit(int argc, char **argv) {
   int ec = 0;
   if (argc == 2) {
