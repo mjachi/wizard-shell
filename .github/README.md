@@ -13,7 +13,7 @@ TODO
      it relies heavily on alphabetical order, since all of the characters are forced to be lowercase,
      and is therefore not a particularly useful completion, but is mostly an issue when there are an 
      extreme number of binaries on the PATH. e.g. my Mac tends to deliver more useless completions 
-     than Gentoo machine, for that very reason.
+     than my Gentoo install because the Gentoo install is just leaner.
      
      I would like to incorporate some sort of priority/ frequency scoring, as well as context.
      e.g. buffer = "cd example_f" --> consider only directory names --> "cd example_folder"
