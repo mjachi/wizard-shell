@@ -1,18 +1,23 @@
 #include "history.h"
 
 /**
- * Helper functions
+ * If the history capacity is reached, this deletes the last node
+ * in the doubly linked list.
+ *
+ * Parameters:
+ *  - h: the history struct to check
+ *
+ * Returns int based on success of operation (if no
+ * error occurs, return 1; otherwise -1).
  */
-
-// if we reach history capacity, this just deletes the last node on the tree.
-int pop_back(history* h){
+int pop_back(history *h) {
   // should never happen
-  if(h->first == NULL){
+  if (h->first == NULL) {
     return -1;
   }
 
-  hist_node* curr = h->first;
-  while(curr->next){
+  hist_node *curr = h->first;
+  while (curr->next) {
     curr = curr->next;
   } // iterate to the end;
   free(curr);
@@ -20,34 +25,35 @@ int pop_back(history* h){
 }
 
 /**
- * Public functions, so to speak, follow
+ * Determines if the history is empty or not.
+ *
+ * Parameters:
+ * - h: the history struct to check
+ *
+ * Returns int based on whether or not the history struct is empty.
  */
+int h_isEmpty(history *h) { return h->count == 0; }
 
 /**
- * h_isEmpty
- * 
- * Takes a history struct; if it is empty, returns 0 (true) otherwise 1
-*/
-int h_isEmpty(history* h) {
-  return h->count == 0;
-}
+ * Determines the current history length
+ *
+ * Parameters:
+ * - h: the history struct to check
+ *
+ * Returns int representing the length of the history DLL
+ */
+int h_length(history *h) { return h->count; }
 
 /**
- * h_length
- * 
- * Returns history length
-*/
-int h_length(history* h) {
-  return h->count;
-}
-
-
-/**
- * h_push
- * 
- * Pushes onto the top of the history stack
-*/
-int h_push(history* h, char* command) {
+ * Pushes a command string onto the history struct.
+ *
+ * Parameters:
+ * - h: the history struct to check
+ * - command: the command to push
+ *
+ * Returns int based on success of operation.
+ */
+int h_push(history *h, char *command) {
   if (!h) { // null history
     return -1;
   }
@@ -58,7 +64,7 @@ int h_push(history* h, char* command) {
     pop_back(h);
   }
 
-  hist_node* new = malloc(sizeof(hist_node));
+  hist_node *new = malloc(sizeof(hist_node));
   if (!new) {
     return -1;
   }
@@ -73,9 +79,3 @@ int h_push(history* h, char* command) {
   h->first = new;
   return 0;
 }
-
-
-// Recall using history struct to access and read, etc.
-
-
-

@@ -91,7 +91,9 @@ uint64_t ht_hash(const char *key) {
   return hash;
 }
 
-// Helper for blowup and recycled in the "public" set function below
+/**
+ * Helper for blowup and recycled in the "public" set function below
+ */
 int ht_set_internal(h_node *hns, int capacity, size_t *plength, const char *key,
                     void *val) {
 
@@ -120,8 +122,10 @@ int ht_set_internal(h_node *hns, int capacity, size_t *plength, const char *key,
   return 0;
 }
 
-// 1.5x table size if need be
-// factor obviously > 1
+/**
+ * Increases ht table size according to factor. Obviously factor must be greater
+ * than 1.
+ */
 void ht_blowup(hash_table *ht, double factor) {
   if (factor <= 1) {
     fprintf(stderr, "Factor of %f will not increase the HT", factor);
